@@ -1,6 +1,6 @@
 # UVS — Uncloned Verification Standard
 
-**Version 1.0 · April 2026 · Uncloned Math**
+**Version 1 · April 2026 · Uncloned Math**
 
 Specification: [github.com/constarik/uvs](https://github.com/constarik/uvs)  
 Site: [uncloned.work](https://uncloned.work)  
@@ -139,40 +139,56 @@ The simulation defines an arbitrarily wide range of parameters at initialization
 
 ### 3.5 Version Negotiation
 
-Each UVS implementation declares a continuous range of supported versions. A session **MUST NOT** start until a version is negotiated.
+Each UVS implementation declares an explicit set of supported integer versions. A session **MUST NOT** start until a version is negotiated. Versions are positive integers, monotonically increasing (1, 2, 3, …). Sets are used instead of ranges to allow explicit exclusion of broken or deprecated versions.
 
 **Negotiation algorithm:**
 
-- `intersection = [ max(minClient, minServer) .. min(maxClient, maxServer) ]`
-- `negotiated   = min(maxClient, maxServer)` — highest version in intersection
+- `intersection = clientVersions ∩ serverVersions`
+- `negotiated   = max(intersection)` — highest version in intersection
 - if intersection is empty → **MUST** reject
 
 **Example (successful):**
 ```
-Client: [1.3 .. 4.2]
-Server: [1.1 .. 2.5]
-intersection : [1.3 .. 2.5]
-negotiated   : 2.5  ✓
+Client versions: [1, 2, 3, 5, 7]
+Server versions: [3, 4, 5, 7, 8]
+intersection   : [3, 5, 7]
+negotiated     : 7  ✓
+```
+
+**Example (with excluded broken version 6):**
+```
+Client versions: [1, 2, 3, 5, 7]   // 6 excluded (known broken)
+Server versions: [3, 5, 7]           // 6 also excluded
+intersection   : [3, 5, 7]
+negotiated     : 7  ✓
 ```
 
 **Example (reject):**
 ```
-Client: [1.0 .. 1.1]
-Server: [1.3 .. 1.5]
-intersection : empty → reject
+Client versions: [1, 2, 3]
+Server versions: [10, 11, 12]
+intersection   : empty → reject
 ```
 
 **Handshake:**
 ```json
-Client → Server: { "minVersion": "1.3", "maxVersion": "4.2" }
-Server → Client: { "negotiated": "3.0", "accepted": true, "serverMin": "1.1", "serverMax": "3.0" }
-          or:    { "accepted": false, "serverMin": "5.0", "serverMax": "6.5" }
+Client → Server: { "versions": [1, 2, 3, 5, 7] }
+Server → Client: { "negotiated": 7, "accepted": true, "serverVersions": [3, 5, 7, 8] }
+          or:    { "accepted": false, "serverVersions": [10, 11, 12] }
 ```
 
-The server **MUST** always return both `serverMin` and `serverMax` in both accepted and rejected responses. On success, the client uses these values to understand the server's full capability range. On reject, the client uses them to determine whether to upgrade or downgrade.
-```
+The server **MUST** always return `serverVersions` in both accepted and rejected responses. On success, the client uses these values to understand the server's full capability range. On reject, the client uses them to determine whether to upgrade or downgrade.
 
-The negotiated version **MUST** be recorded in the Audit Trail header. Versions are treated as a monotonically ordered sequence — there is no special boundary between major versions during negotiation.
+The negotiated version **MUST** be recorded in the Audit Trail header.
+
+**Reference implementation (JS):**
+```js
+function negotiate(clientVersions, serverVersions) {
+  const intersection = clientVersions.filter(v => serverVersions.includes(v));
+  if (!intersection.length) return null;
+  return Math.max(...intersection);
+}
+```
 
 ### 3.6 Versioning Semantics
 
@@ -692,4 +708,4 @@ UVS is:
 
 ---
 
-*UVS 1.0 · Uncloned Math · April 2026 · uncloned.work*
+*UVS v1 · Uncloned Math · April 2026 · uncloned.work*
