@@ -328,18 +328,35 @@ where `minNonce` is the first nonce value used in the session.
 |---|---|
 | **PENDING** | version negotiated, serverSeedHash published, clientSeed received. No rounds started. |
 | **ACTIVE** | at least one round executed. Audit Trail is being written. |
+| **MOVE** | multiplayer only. Waiting for a specific player's input. Subject to per-move timeout. |
 | **REVEALED** | serverSeed disclosed and verified. Session closed. Audit Trail final. |
 | **HALTED** | fatal error occurred. Refund protocol in effect. Audit Trail sealed with error record. |
 
 **State transitions:**
 ```
 PENDING  → ACTIVE   : first round executed
+ACTIVE   → MOVE     : multiplayer — awaiting input from a specific player (repeating)
+MOVE     → ACTIVE   : input received within timeout
+MOVE     → ACTIVE   : timeout expired — move recorded as SKIP, game continues
 ACTIVE   → REVEALED : operator discloses serverSeed, SHA256(serverSeed) == serverSeedHash
 ACTIVE   → HALTED   : fatal error detected (section 8.1)
 PENDING  → HALTED   : fatal error before first round
 HALTED   → terminal
 REVEALED → terminal
 ```
+
+**MOVE timeout policy:**
+
+- The timeout value per move **MUST** be declared in the session header
+- On timeout, the missing move **MUST** be recorded in the Audit Trail as `{ type: "skip", playerId, tick }`
+- The game **MUST** continue without the missing player's input for that move
+- The skipped move **MUST** be deterministically substitutable — implementations **SHOULD** use a fixed fallback input (e.g. `null` or a declared default) derived from the session seed
+- A player who misses a move does not receive a refund — timeout is the player's responsibility
+
+**Single-player timeout policy:**
+
+- If the session is single-player and verify is not received within TTL, the stake is forfeited — no refund
+- Refund applies only on server-side fault (`ERR_HASH_MISMATCH`)
 
 ### 5.3 Connection Loss
 
@@ -348,7 +365,8 @@ If the connection is interrupted during an ACTIVE session:
 - The server **MUST NOT** advance session state until connection is restored
 - The server **MUST** preserve the Audit Trail in its current state
 - Upon reconnection, the client **MAY** request the Audit Trail from the last confirmed step
-- If connection is not restored within the declared timeout, the session **MUST** transition to HALTED and the refund protocol **MUST** apply to all rounds without a confirmed stateHash on the client side
+- In multiplayer (MOVE state): if connection is not restored within the move timeout, the move is recorded as SKIP and the game continues
+- In single-player: if connection is not restored within the declared TTL, the stake is forfeited
 - The timeout value **MUST** be declared in the session header
 
 ---
