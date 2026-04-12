@@ -360,14 +360,13 @@ REVEALED → terminal
 
 ### 5.3 Connection Loss
 
-If the connection is interrupted during an ACTIVE session:
+If the connection is interrupted the server **MUST NOT** advance session state until connection is restored and **MUST** preserve the Audit Trail in its current state.
 
-- The server **MUST NOT** advance session state until connection is restored
-- The server **MUST** preserve the Audit Trail in its current state
-- Upon reconnection, the client **MAY** request the Audit Trail from the last confirmed step
-- In multiplayer (MOVE state): if connection is not restored within the move timeout, the move is recorded as SKIP and the game continues
-- In single-player: if connection is not restored within the declared TTL, the stake is forfeited
-- The timeout value **MUST** be declared in the session header
+**Multiplayer (MOVE state):** if not restored within the move timeout, the move is recorded as `{ type: "skip", playerId, tick }` and the game continues. No refund for skipped moves.
+
+**Single-player:** if verify is not received within TTL, the stake is forfeited. Refund applies only on server-side fault (`ERR_HASH_MISMATCH`).
+
+The timeout value **MUST** be declared in the session header.
 
 ---
 
