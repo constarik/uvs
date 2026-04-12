@@ -165,7 +165,7 @@ intersection : empty → reject
 **Handshake:**
 ```json
 Client → Server: { "minVersion": "1.3", "maxVersion": "4.2" }
-Server → Client: { "negotiated": "2.5", "accepted": true, "serverMin": "1.1", "serverMax": "3.0" }
+Server → Client: { "negotiated": "3.0", "accepted": true, "serverMin": "1.1", "serverMax": "3.0" }
           or:    { "accepted": false, "serverMin": "5.0", "serverMax": "6.5" }
 ```
 
