@@ -411,10 +411,12 @@ Upon detection of `SHA-256(serverSeed) != serverSeedHash`:
 
 - The simulation **MUST** halt immediately
 - A dispute record **MUST** be appended to the Audit Trail (timestamp, last valid stateHash, mismatched values)
-- All active rounds **MUST** be refunded at the stake value recorded in the last valid stateHash entry
+- All active rounds **MUST** be refunded at **double the stake value** recorded in the last valid stateHash entry — the penalty multiplier compensates the player for the operator's fault
 - Unverified outcomes **MUST NOT** be paid out
 
-The protocol is responsible only for detection, halt, and refund. Diagnosis is the responsibility of the operator.
+The double-stake penalty creates an economic incentive for operators to maintain correct seed management. The penalty multiplier (default: 2×) **MAY** be overridden by the operator in the session header; the declared value is binding for the session.
+
+The protocol is responsible only for detection, halt, and refund calculation. Diagnosis and payment are the responsibility of the operator.
 
 ---
 
