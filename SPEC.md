@@ -166,7 +166,10 @@ intersection : empty → reject
 ```json
 Client → Server: { "minVersion": "1.3", "maxVersion": "4.2" }
 Server → Client: { "negotiated": "2.5", "accepted": true }
-          or:    { "accepted": false, "serverMin": "1.3", "serverMax": "1.5" }
+          or:    { "accepted": false, "serverMin": "5.0", "serverMax": "6.5" }
+```
+
+On reject, the server **MUST** always return both `serverMin` and `serverMax` regardless of which direction the mismatch lies. The client uses these values to determine whether to upgrade or downgrade.
 ```
 
 The negotiated version **MUST** be recorded in the Audit Trail header. Versions are treated as a monotonically ordered sequence — there is no special boundary between major versions during negotiation.
