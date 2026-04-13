@@ -444,7 +444,7 @@ The Audit Trail **MUST** begin with a header record:
 ```json
 {
   "type":           "uvs-header",
-  "uvsVersion":     "string",    // negotiated UVS version e.g. "1.0"
+  "uvsVersion":     1,              // negotiated UVS version, integer
   "sessionId":      "string",    // SHA-256(serverSeedHash+":"+clientSeed+":"+minNonce)
   "serverSeedHash": "string",    // SHA-256 of serverSeed, hex 64 chars
   "clientSeed":     "string",    // UTF-8, max 256 bytes
@@ -576,7 +576,7 @@ function runSimulation(serverSeed, clientSeed, startNonce, params, maxSteps) {
 
   const auditTrail = {
     header: {
-      type: 'uvs-header', uvsVersion: '1.0', sessionId,
+      type: 'uvs-header', uvsVersion: 1, sessionId,
       serverSeedHash, clientSeed, minNonce: startNonce,
       params, extensions: [], timeout: 30,
       timestamp: new Date().toISOString()
