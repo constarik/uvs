@@ -720,9 +720,6 @@ Implementation version: semver  (release of this implementation, e.g. 9.0.8)
 The major component of the implementation version **MUST** match the engine version (`ENGINE_VERSION`). This constraint **MUST** be enforced programmatically before any release — a version mismatch **MUST** abort the release process.
 
 Example: `ENGINE_VERSION = 9` requires implementation version `9.x.x`. Releasing `10.0.0` with `ENGINE_VERSION = 9` is a violation.
-- a JS reference VM
-- tooling
-- an open-source ecosystem
 
 ---
 
