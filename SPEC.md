@@ -695,6 +695,21 @@ UVS is:
 - tooling
 - an open-source ecosystem
 
+### 12.4 Out of Scope
+
+The following are explicitly outside the scope of UVS and any conforming implementation:
+
+- **Persistent storage** — how and where Audit Trail data is stored is the operator's decision
+- **Payment processing** — deposits, withdrawals, and refund execution are the operator's responsibility
+- **Infrastructure** — hosting, scaling, availability, and disaster recovery are outside the protocol
+- **Identity** — KYC, AML, and jurisdictional compliance are the operator's legal obligation
+- **UI/UX** — UVS secures the computation layer, not the presentation layer
+
+UVS guarantees that the computation was fair. Everything above that line is the operator's domain.
+- a JS reference VM
+- tooling
+- an open-source ecosystem
+
 ---
 
 ## 13. Threat Model
