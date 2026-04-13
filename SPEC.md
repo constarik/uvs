@@ -547,6 +547,8 @@ Fatal errors **MUST** append an error record to the Audit Trail before halting:
 
 ## 9. Reproducibility Requirements
 
+### 9.1 Single Execution
+
 A game is considered UVS-compatible if and only if:
 
 - its simulation is fully deterministic given identical seed and params
@@ -557,6 +559,22 @@ A game is considered UVS-compatible if and only if:
 - its caller-defined parameters are declared prior to execution and recorded in the Audit Trail header
 - its outcome can be independently recalculated by any third party
 - its JS reference VM supports caller-defined parameters natively
+
+### 9.2 Simulation
+
+A simulation is N consecutive executions of the same UVS-compatible game engine. Because each execution is a single verifiable run, simulation is structurally identical to single execution — it requires no additional protocol machinery.
+
+Simulation parameters are game-dependent and declared in the session header `params` field. Examples:
+
+| Domain | Simulation Parameters |
+|---|---|
+| Slot Math | `{ rtpTier, betPerSpin, numSpins }` |
+| Physics Arcade | `{ numBalls, betPerBall, strategy, numGames }` |
+| Card Games | `{ numHands, deckCount, betPerHand }` |
+
+A simulation run **MUST** produce the same aggregate statistics given identical seed sequence and params. The aggregate output (e.g. RTP, hit rate, max win) **MUST** be reproducible and verifiable by any third party using the same inputs.
+
+Simulation services **MAY** be offered as a paid endpoint by the operator. Rate limiting, quota management, and billing are outside the scope of UVS.
 
 ---
 
