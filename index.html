@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>UVS — Uncloned Verification Standard</title>
+  <meta name="description" content="A universal protocol for verifiable games. Provably fair by mathematics, not by trust.">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;700;800&display=swap" rel="stylesheet">
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-TRP1QX4878"></script>
+  <script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag('js',new Date());gtag('config','G-TRP1QX4878');</script>
+  <style>
+    :root {
+      --bg: #04080f;
+      --fg: #e8edf5;
+      --accent: #00d4ff;
+      --accent2: #00ff88;
+      --dim: rgba(255,255,255,0.4);
+      --border: rgba(0,212,255,0.2);
+      --mono: 'Space Mono', monospace;
+      --display: 'Syne', sans-serif;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { min-height: 100vh; background: var(--bg); color: var(--fg); font-family: var(--mono); overflow-x: hidden; }
+
+    /* Grid background */
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      background-image:
+        linear-gradient(rgba(0,212,255,0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,212,255,0.04) 1px, transparent 1px);
+      background-size: 60px 60px;
+      pointer-events: none; z-index: 0;
+    }
+
+    .wrap {
+      position: relative; z-index: 1;
+      min-height: 100vh;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      padding: 40px 20px;
+      gap: 0;
+    }
+
+    /* Header */
+    .badge {
+      font-family: var(--mono); font-size: 10px; letter-spacing: 3px;
+      color: var(--accent); border: 1px solid var(--border);
+      padding: 5px 14px; border-radius: 20px;
+      background: rgba(0,212,255,0.05);
+      margin-bottom: 32px;
+      animation: fadeIn 0.6s ease both;
+    }
+
+    h1 {
+      font-family: var(--display); font-size: clamp(3rem, 10vw, 7rem);
+      font-weight: 800; letter-spacing: -2px; line-height: 0.95;
+      text-align: center; margin-bottom: 8px;
+      animation: fadeIn 0.7s ease both 0.1s;
+    }
+    h1 .uvs { color: var(--accent); }
+    h1 .v1 {
+      font-size: 0.35em; vertical-align: super;
+      color: var(--accent2); font-weight: 400; letter-spacing: 2px;
+    }
+
+    .tagline {
+      font-family: var(--mono); font-size: clamp(11px, 2vw, 14px);
+      color: var(--dim); text-align: center; letter-spacing: 1px;
+      max-width: 480px; line-height: 1.7; margin-bottom: 56px;
+      animation: fadeIn 0.8s ease both 0.2s;
+    }
+
+    /* Three buttons */
+    .actions {
+      display: flex; flex-direction: column; gap: 12px;
+      width: 100%; max-width: 480px;
+      animation: fadeIn 0.9s ease both 0.3s;
+    }
+
+    .btn {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 18px 24px; border-radius: 4px;
+      text-decoration: none; font-family: var(--mono);
+      font-size: 13px; letter-spacing: 1px;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.02);
+      color: var(--fg);
+      transition: all 0.2s ease;
+      cursor: pointer; position: relative; overflow: hidden;
+    }
+    .btn::before {
+      content: ''; position: absolute; inset: 0;
+      background: linear-gradient(90deg, transparent, rgba(0,212,255,0.05), transparent);
+      transform: translateX(-100%); transition: transform 0.4s ease;
+    }
+    .btn:hover::before { transform: translateX(100%); }
+    .btn:hover {
+      border-color: var(--accent);
+      background: rgba(0,212,255,0.06);
+      color: var(--accent);
+      transform: translateX(4px);
+    }
+    .btn .label { display: flex; flex-direction: column; gap: 2px; }
+    .btn .label-main { font-weight: 700; font-size: 14px; }
+    .btn .label-sub { font-size: 10px; color: var(--dim); letter-spacing: 0.5px; }
+    .btn:hover .label-sub { color: rgba(0,212,255,0.6); }
+    .btn .arrow { font-size: 18px; opacity: 0.4; transition: all 0.2s; }
+    .btn:hover .arrow { opacity: 1; transform: translateX(4px); }
+
+    .btn-spec  { border-left: 3px solid var(--accent); }
+    .btn-demo  { border-left: 3px solid var(--accent2); }
+    .btn-dev   { border-left: 3px solid #ff6b35; }
+    .btn-demo:hover  { border-color: var(--accent2); background: rgba(0,255,136,0.05); color: var(--accent2); }
+    .btn-dev:hover   { border-color: #ff6b35; background: rgba(255,107,53,0.05); color: #ff6b35; }
+
+    /* Footer */
+    .footer {
+      margin-top: 64px; text-align: center;
+      font-size: 10px; color: rgba(255,255,255,0.2);
+      letter-spacing: 2px; line-height: 2;
+      animation: fadeIn 1s ease both 0.5s;
+    }
+    .footer a { color: rgba(0,212,255,0.4); text-decoration: none; }
+    .footer a:hover { color: var(--accent); }
+
+    /* Decorative corner hash */
+    .corner {
+      position: fixed; font-family: var(--mono);
+      font-size: 10px; color: rgba(0,212,255,0.15);
+      letter-spacing: 1px; pointer-events: none; z-index: 0;
+    }
+    .corner-tl { top: 20px; left: 20px; }
+    .corner-tr { top: 20px; right: 20px; }
+    .corner-bl { bottom: 20px; left: 20px; }
+    .corner-br { bottom: 20px; right: 20px; }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(12px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    @media (max-width: 480px) {
+      .btn { padding: 16px 18px; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="corner corner-tl">UVS / v1</div>
+<div class="corner corner-tr">UNCLONED MATH</div>
+<div class="corner corner-bl">github.com/constarik/uvs</div>
+<div class="corner corner-br">April 2026</div>
+
+<div class="wrap">
+  <div class="badge">UNCLONED VERIFICATION STANDARD</div>
+
+  <h1><span class="uvs">UVS</span><span class="v1"> v1</span></h1>
+
+  <p class="tagline">
+    A universal protocol for verifiable games.<br>
+    Provably fair by mathematics, not by trust.
+  </p>
+
+  <div class="actions">
+    <a class="btn btn-spec" href="SPEC.md" target="_blank">
+      <div class="label">
+        <span class="label-main">📄 Specification</span>
+        <span class="label-sub">Protocol · ChaCha20 · Audit Trail · Session States</span>
+      </div>
+      <span class="arrow">→</span>
+    </a>
+
+    <a class="btn btn-demo" href="https://paddla.uncloned.work" target="_blank">
+      <div class="label">
+        <span class="label-main">🏓 Live Demo</span>
+        <span class="label-sub">PADDLA — UVS v1 physics arcade · provably fair</span>
+      </div>
+      <span class="arrow">→</span>
+    </a>
+
+    <a class="btn btn-dev" href="https://github.com/constarik/uvs" target="_blank">
+      <div class="label">
+        <span class="label-main">⚙ For Developers</span>
+        <span class="label-sub">GitHub · npm paddla-engine · test vectors · MIT</span>
+      </div>
+      <span class="arrow">→</span>
+    </a>
+  </div>
+
+  <div class="footer">
+    <a href="https://uncloned.work">uncloned.work</a> &nbsp;·&nbsp;
+    Implementation 1 &nbsp;·&nbsp;
+    <a href="https://github.com/constarik/paddla-engine">paddla-engine on npm</a>
+  </div>
+</div>
+
+</body>
+</html>
