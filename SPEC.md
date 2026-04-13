@@ -574,6 +574,8 @@ Simulation parameters are game-dependent and declared in the session header `par
 
 A simulation run **MUST** produce the same aggregate statistics given identical seed sequence and params. The aggregate output (e.g. RTP, hit rate, max win) **MUST** be reproducible and verifiable by any third party using the same inputs.
 
+A local simulation interface is **RECOMMENDED** on the client side. This allows any player to independently run N games, observe aggregate RTP, and confirm that the engine behaves as declared — without trusting the operator's server. This is the practical expression of the "not trust — verification" principle (section 12.2).
+
 Simulation services **MAY** be offered as a paid endpoint by the operator. Rate limiting, quota management, and billing are outside the scope of UVS.
 
 ---
