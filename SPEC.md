@@ -27,6 +27,7 @@ Design reference: [registrar.uncloned.work](https://registrar.uncloned.work)
 11. [Test Vectors](#11-test-vectors)
 12. [Philosophy of UVS](#12-philosophy-of-uvs)
 13. [Threat Model](#13-threat-model)
+- [Appendix A — PADDLA Audit Trail](#appendix-a--paddla-audit-trail-physics-arcade-extension)
 
 ---
 
@@ -496,6 +497,16 @@ The Audit Trail enables:
 - The Merkle root **MAY** be published independently as a compact session fingerprint
 - If used, the algorithm and tree structure **MUST** be declared in the Audit Trail header
 
+### 7.4 Domain-Specific Audit Trail
+
+The step record defined in section 7.1 is the canonical format for general-purpose UVS implementations. However, for specific game classes the format **MAY** be adapted, provided that:
+
+- `stateHash` is present on every recorded step
+- the recorded data is sufficient to independently reproduce and verify any disputed outcome
+- the adaptation is documented in a domain-specific appendix referenced in the session header
+
+This allows implementations to omit fields that are structurally redundant for their domain (e.g. `rngCalls` in physics engines that do not use ChaCha20 directly) without losing verifiability.
+
 ---
 
 ## 8. Error Codes & Failure Modes
@@ -754,3 +765,76 @@ Example: `ENGINE_VERSION = 9` requires implementation version `9.x.x`. Releasing
 ---
 
 *UVS v1 · Uncloned Math · April 2026 · uncloned.work*
+
+---
+
+## Appendix A — PADDLA Audit Trail (Physics Arcade Extension)
+
+This appendix defines the domain-specific Audit Trail format for PADDLA, a physics arcade game using the UVS Physics Arcade Extension. It is referenced in the PADDLA session header as `"extensions": ["physics-arcade@1"]`.
+
+### A.1 Overview
+
+PADDLA's engine is deterministic given two inputs: `serverSeed` (derived from WASM computation over `regSeed` + `gameSeed`) and `inputLog` (bumper positions per tick, provided by the client). The Registrar performs a full replay and can detect any divergence.
+
+Because PADDLA does not use ChaCha20 directly (it uses LCG + SHA-256 for state hashing), the standard `rngCalls` field is not applicable. Instead the Audit Trail records:
+
+- full `inputLog` — bumper target per tick
+- event-only `eventLog` — ticks where game events occurred, with `stateHash`
+
+### A.2 Session Header Extension
+
+```json
+{
+  "type":           "uvs-header",
+  "uvsVersion":     1,
+  "extensions":     ["physics-arcade@1"],
+  "sessionId":      "string",
+  "serverSeedHash": "string",
+  "clientSeed":     "string",
+  "regSeed":        "uint32",
+  "gameSeed":       "uint32",
+  "numBalls":       "uint32",
+  "betPerBall":     "number",
+  "timeout":        30,
+  "timestamp":      "string"
+}
+```
+
+### A.3 Input Log
+
+One entry per tick, for the full duration of the game:
+
+```json
+{ "tick": "uint64", "target": { "x": "float", "y": "float" } | null }
+```
+
+`null` target means no input was provided for that tick (bumper held in place).
+
+### A.4 Event Log
+
+One entry per tick where at least one game event occurred:
+
+```json
+{
+  "tick":      "uint64",
+  "events":    "string[]",
+  "stateHash": "string",
+  "totalWin":  "number"
+}
+```
+
+`events` contains event type names: `spawn`, `goal`, `bumperHit`, `collision`, `timeout`, `explosion`, `gameEnd`.
+
+`stateHash` = SHA-256 of canonical JSON of: `{ ballsOnField, ballsSpawned, progressive, totalWin }`.
+
+### A.5 Verification Protocol
+
+Upon receiving a dispute:
+
+1. Registrar recomputes `serverSeed` from `regSeed` + `gameSeed` via WASM spec
+2. Registrar replays the full game using `serverSeed` + `inputLog`
+3. On each event tick, Registrar computes `stateHash` and compares with client's `eventLog`
+4. First divergence is reported as `firstMismatch: { tick, event, clientHash, serverHash }`
+5. If `serverTotalWin ≠ clientTotalWin` → mismatch detected
+
+A mismatch indicates either a bug in the engine (reproducible across all clients) or a tampered client engine (isolated to this session).
