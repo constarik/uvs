@@ -706,6 +706,20 @@ The following are explicitly outside the scope of UVS and any conforming impleme
 - **UI/UX** — UVS secures the computation layer, not the presentation layer
 
 UVS guarantees that the computation was fair. Everything above that line is the operator's domain.
+
+### 12.5 Implementation Versioning
+
+An implementation of UVS is identified by three values:
+
+```
+UVS version          : integer  (protocol version, e.g. 1)
+Implementation number: integer  (implementation identifier, e.g. 1)
+Implementation version: semver  (release of this implementation, e.g. 9.0.8)
+```
+
+The major component of the implementation version **MUST** match the engine version (`ENGINE_VERSION`). This constraint **MUST** be enforced programmatically before any release — a version mismatch **MUST** abort the release process.
+
+Example: `ENGINE_VERSION = 9` requires implementation version `9.x.x`. Releasing `10.0.0` with `ENGINE_VERSION = 9` is a violation.
 - a JS reference VM
 - tooling
 - an open-source ecosystem
