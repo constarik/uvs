@@ -6,17 +6,19 @@ Open protocol for verifiable games. Mathematically provable fairness without reg
 
 ---
 
-**Version:** 1.0  
-**Status:** Final  
+**Version:** 2.0  
+**Status:** Active development  
 **Published:** April 2026  
 **Author:** [Uncloned Math](https://uncloned.work)  
-**Design reference:** [Registrar Protocol](https://registrar.uncloned.work)
+**Previous version:** [SPEC-v1.md](./SPEC-v1.md)
 
 ---
 
 ## What is UVS?
 
-UVS defines how randomness is generated, how state is recorded, how simulation is reproduced, and how fairness is verified — without trusting the operator.
+UVS defines how randomness is generated, how state is recorded, how simulation is reproduced, how player actions (Moves) are verified, and how fairness is proven — without trusting the operator.
+
+**New in v2:** Move as first-class concept, configurable verification granularity (batch to per-tick), bidirectional replay, WASM per-session layer, Registrar as protocol role. One Move = one game.
 
 It is not a library, not a framework, and not an engine. It is a protocol.
 
