@@ -142,7 +142,7 @@ Move Mode introduces three new concepts:
 
 1. **Move as Verification Unit** — a single Move with its seed and tick constitutes an independently verifiable computation, equivalent to one Stateless game.
 2. **Verification Granularity** — how often verification occurs.
-3. **Bidirectional Replay** — any party can replay any other party's actions.
+3. **Full Session Replay** — any party can replay the complete session and verify every state transition.
 
 Move Mode is defined in detail in section 5.
 
@@ -192,24 +192,18 @@ This has a critical security property: **even if the player knows the seed, they
 
 Input-Seeded Randomness is **OPTIONAL** within Move Mode. Games **MAY** use seed-only randomness with Move input affecting only deterministic mechanics (e.g. steering, placement). The choice **MUST** be declared in the session header.
 
-### 5.4 Bidirectional Replay
+### 5.4 Full Session Replay
 
-Any party with the engine, seed, and Move sequence can independently reproduce the game state. Replay is bidirectional:
+Any party with the engine, seed, and **complete** Move history can independently replay the **full session** and verify every state transition. In multiplayer, individual Moves cannot be verified in isolation — each Move's effect depends on all other players' Moves at the same tick. Therefore, replay always operates on the full session: all players, all ticks, all Moves.
 
-| Direction | Description |
-|-----------|-------------|
-| Client → Server | Server replays client's Moves, verifies outcome |
-| Server → Client | Client replays server's broadcast state, verifies consistency |
-| Player → Player | Any player replays any other player's Moves, verifies fairness |
-
-Bidirectional replay is possible because:
+Full session replay is possible because:
 
 1. The engine is deterministic (Core requirement)
 2. The engine is shared (Single Engine requirement)
-3. All Moves are recorded (Audit Trail requirement)
+3. **All** Moves from **all** players are recorded (Audit Trail requirement)
 4. Seeds are known to all parties (Seed Protocol requirement)
 
-In multiplayer (G=1), bidirectional replay means **no player needs to trust any other player or the server**. Every action is independently verifiable by every participant.
+Any participant can replay the full session and compare `stateHash` at every tick. If any tick diverges, either the server computed incorrectly or a client submitted falsified data — the Audit Trail identifies the first point of divergence.
 
 ### 5.4.1 Verification Timing
 
@@ -217,7 +211,7 @@ In Move Sync (G=1), real-time client-side verification is impractical — the ve
 
 Client-side verification in Move Sync is therefore **post-factum**: after the session ends, any player can download the Audit Trail and independently replay the full session at their own pace.
 
-**Real-time integrity** is the server's responsibility (G=1 verification on every tick). **Post-factum integrity** is the player's right (Audit Trail + Bidirectional Replay).
+**Real-time integrity** is the server's responsibility (G=1 verification on every tick). **Post-factum integrity** is the player's right (Audit Trail + Full Session Replay).
 
 | Timing | Who verifies | When | Purpose |
 |--------|-------------|------|---------|
@@ -255,7 +249,7 @@ In Move Batch, the client is the authority and the server is the auditor (post-f
 - The engine is the same on client and server (Single Engine)
 - The seed is known to all players (Seed Protocol)
 - Every Move is recorded (Audit Trail)
-- Any player can independently verify any tick (Bidirectional Replay)
+- Any player can independently verify any tick (Full Session Replay)
 
 This is **not** the classical oracle model (where the server is trusted blindly). The server is authoritative **but verifiable** — any player can catch a dishonest server by replaying the Move sequence locally.
 
