@@ -1,6 +1,6 @@
 # UVS v3 — Design Notes
 
-**Status:** Draft · Target release: before July 2026 · Blocked on: NOISORE Move Sync reference implementation
+**Status:** Draft · Target release: before July 2026 · Blocked on: `uvs-sdk` publication and NOISORE Move Sync reference implementation
 
 This document records design decisions taken for the upcoming UVS v3 revision. It exists so that:
 
@@ -272,7 +272,7 @@ Version negotiation logic (integer sets with `max(intersection)`, per current §
 | 10.3 (Protected seed) | Amend | clientSeed retained in combinedSeed formula |
 | 11 (Audit Trail format) | Amend | Signed move and ack fields; public trail URL + hash |
 | 12 (Errors) | Amend | Add ERR_SIGNATURE_INVALID, ERR_SEQ_GAP, ERR_NO_PUBLIC_LOG, ERR_MISSING_ACK |
-| 14 (References) | Update | NOISORE status promoted from Planned to Production on release |
+| 14 (References) | Update | NOISORE status promoted from Planned to Production on release; `uvs-sdk` listed as reference SDK |
 | 16.4 (Philosophy) | Amend | Move-or-Tick scope note |
 | 17 (Threat Model) | Extend | Add anti-equivocation, attribution, dispute-evidence items |
 
@@ -292,3 +292,98 @@ Items identified during design but explicitly deferred:
 *UVS v3 Design Notes · Uncloned Math · April 2026*
 
 *Constantin Razinsky · constr@gmail.com · Telegram: @constrik*
+
+## 8. SDK Strategy — reducing the barrier for third-party adopters
+
+**Concern:** the cryptographic additions in §2 add concrete implementation work for any party building a v3-compliant Move Mode game. If this work must be redone from scratch by every adopter, v3 risks becoming a barrier rather than an enabler.
+
+**Resolution:** v3 is released together with a reference SDK that encapsulates all cryptographic and protocol machinery. Game developers integrate at a high level; they do not implement signatures, canonical JSON, publication pipelines, or sequential processing logic themselves.
+
+### What the SDK provides
+
+**Client-side (`uvs-sdk`, JavaScript / TypeScript):**
+
+- `UvsSession.create({ gameSeed, versions })` — session initialization, keypair generation, version negotiation
+- `session.signMove(move)` — produces a signed_move record ready for transmission
+- `session.verifyAck(ack)` — validates server ack, detects seq gaps, tracks state
+- `session.getLocalLog()` — returns the local evidence record for dispute purposes
+- Canonical JSON serializer (byte-exact across runtimes)
+- ed25519 signing via noble-curves (no native dependencies)
+
+**Server-side (`uvs-sdk-server`, Node.js):**
+
+- `UvsServer` middleware for Express / Fastify / Cloudflare Workers
+- `server.verifyMove(signed_move)` — signature check, sequential processing validation
+- `server.issueAck(move, move_hash)` — produces signed_ack with server keypair
+- `server.finalizeSession(sessionId)` — assembles Audit Trail, publishes, returns URL + hash + signature
+- Pluggable publication backends: GitHub Gist, IPFS via pinning service, HTTPS endpoint, blockchain
+
+**Verifier (`uvs-verify`, CLI + web):**
+
+- Accepts Audit Trail URL or local file
+- Validates all signatures, sequential consistency, replay correctness
+- Produces verdict: `VERIFIED` or `DIVERGENCE at tick N, reason: ...`
+- Usable by any third party without protocol knowledge
+
+### Cost model for a third-party developer
+
+With SDK present, integration reduces to approximately:
+
+```js
+import { UvsSession } from 'uvs-sdk'
+
+const session = await UvsSession.create({
+  gameSeed: myGameSeed,
+  versions: [3]
+})
+
+// when player makes a move:
+const signed = session.signMove({ x: 3.2, y: 1.5 })
+ws.send(signed)
+
+// when server ack arrives:
+session.verifyAck(ack)  // throws if invalid
+```
+
+This is comparable in effort to integrating a JWT library or a WebSocket client. The cryptography is invisible.
+
+Without the SDK, the same developer would face: noble-curves installation and study, canonical JSON subtleties across runtimes, sequence validation edge cases, publication channel selection, verifier construction. Conservative estimate: 3–4 days of implementation plus debugging against absent test vectors.
+
+### Development path
+
+The SDK is not a separate side project. It emerges naturally from NOISORE Move Sync work — all cryptographic components are needed for NOISORE anyway. The discipline is to write them as a library dependency from the start, not embed them inline in game code.
+
+Estimated allocation:
+
+- Week 1–3: SDK construction and test vector generation
+- Week 4–6: NOISORE implementation on top of SDK
+- Week 7: verifier tool and publication channel integrations
+- Week 8: documentation, npm publication, v3 release
+
+This reorders, but does not inflate, the two-month estimate.
+
+### Publication
+
+Packages under `@uncloned/uvs` scope on npm (or similar). Repository structure:
+
+```
+uvs-sdk/
+  packages/
+    core/          — shared protocol types and utilities
+    client/        — browser-side session management
+    server/        — Node.js server middleware
+    verifier/      — verification CLI + library
+    test-vectors/  — canonical vectors for cross-implementation testing
+```
+
+Open source under a permissive license (MIT or Apache-2.0). The protocol itself is not licensed; the SDK is one of potentially many implementations.
+
+### Barrier assessment
+
+With SDK: a new Move Sync game can be made UVS-v3 compliant in 1–2 days of integration work, no cryptographic knowledge required.
+
+Without SDK: 2–4 weeks including protocol study, cryptographic implementation, and debugging.
+
+The SDK is therefore treated as a first-class deliverable of v3, not an optional companion. v3 release is blocked not only on NOISORE but on SDK publication.
+
+---
