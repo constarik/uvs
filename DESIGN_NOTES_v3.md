@@ -240,7 +240,8 @@ Estimated effort: 1–2 months of focused work.
 Until v3 release:
 - `SPEC.md` remains at v2 as currently published
 - This `DESIGN_NOTES_v3.md` serves as public signal of intended direction
-- Current v2 implementations (Registrar Demo, PADDLA) continue to operate unchanged
+- PADDLA continues to operate at `uvsVersion: 1` as currently deployed (Move Batch + Protected semantics, v1 header). Upgrade to v3 will be performed alongside the SDK rollout.
+- Registrar Demo continues to operate at its current published version.
 
 ---
 
