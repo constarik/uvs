@@ -33,6 +33,7 @@ Reference implementations: [paddla.uncloned.work](https://paddla.uncloned.work) 
 15. [Test Vectors](#15-test-vectors)
 16. [Philosophy](#16-philosophy)
 17. [Threat Model](#17-threat-model)
+18. [Shipped Implementation Conformance](#18-shipped-implementation-conformance)
 
 ---
 
@@ -111,6 +112,8 @@ Client and server exchange integer sets of supported versions. Negotiated versio
 ### 3.6 Audit Trail
 
 Every simulation step **MUST** be recorded with sufficient data to independently reproduce and verify the outcome. See section 11 for format.
+
+> **Shipped (§18.3):** the live trail stores the compressed **recipe** (seed + delta-encoded `inputLog` + result), and outcomes are reproduced by **replay** — not by stored per-step `stateHash`/`rngCalls`, which are an optional in-play diagnostic only.
 
 ---
 
@@ -287,6 +290,8 @@ The WASM binary's internal structure (which operations, in what order, with what
 
 The Registrar is an **independent verification node** within UVS. It is not a separate protocol — it is a role that a server can assume.
 
+> **Shipped (§18.4):** in PADDLA, verification is **self-contained on the client** (seed check via WASM/`runSpec` + engine result-replay). The Registrar's `/verify` is optional corroboration; its irreducible roles are the **pre-play commitment** (issuing `regSeed`) and **trail hosting** — not verification-as-trust.
+
 **Registrar responsibilities:**
 
 1. **Issues `regSeed`** — cryptographically random, per-session, used for WASM generation
@@ -378,6 +383,10 @@ All UVS implementations **MUST** use ChaCha20 (RFC 8439) as the pseudorandom num
 ```
 combinedSeed = SHA-512(serverSeed + ":" + clientSeed + ":" + nonce)
 ```
+
+> **Shipped (PADDLA, §18.1):** randomness is input-seeded and per-tick — the
+> `clientSeed` component is the bumper position `"x.xxxx:y.yyyy"` and `nonce` is the
+> tick counter. The header `clientSeed: "uvs-paddla"` is a session label, not this value.
 
 In Protected mode with WASM layer, `serverSeed` is replaced by `finalSeed` (output of WASM computation).
 
@@ -660,6 +669,105 @@ Persistent storage, payment processing, infrastructure, identity (KYC/AML), and 
 
 ---
 
-*UVS v2 · Uncloned Math · April 2026 · [uncloned.work](https://uncloned.work)*
+## 18. Shipped Implementation Conformance
+
+> **Purpose.** Sections 1–17 define the abstract standard (including Move Sync /
+> NOISORE, which is *planned*). This section pins the **concrete values of what is
+> actually shipped** — the PADDLA reference (the only live Move implementation) and
+> its Registrar — against the abstract spec, so spec↔implementation drift is
+> auditable rather than latent. *Reconciled 2026-06-06 against: engine `ENGINE_VERSION 9`,
+> registrar `2.3.0`, client `9.2.0`.* Where this section is more specific than the
+> text above, it describes reality; the abstract sections remain the general standard.
+
+### 18.1 Per-tick combined seed (concretizes §5.3, §8.1)
+
+PADDLA is **Move Batch, input-seeded**. A fresh ChaCha20 PRNG is created **every tick**:
+
+```
+combinedSeed_t = SHA-512( serverSeed + ":" + bumperX.toFixed(4) + ":" + bumperY.toFixed(4) + ":" + t )
+state.rng     = ChaCha20( key = combinedSeed_t[0..31], nonce = combinedSeed_t[32..43] )
+```
+
+Mapping to §8.1 `SHA-512(serverSeed + ":" + clientSeed + ":" + nonce)`: here the
+per-tick **`clientSeed` component is the bumper position** `"x.xxxx:y.yyyy"`, and the
+**`nonce` is the tick counter `t`**. The header field `clientSeed: "uvs-paddla"`
+(§11.1) is a constant **session label**, distinct from this per-tick value. Because
+randomness is input-seeded, the seed is effectively derivable before play, yet
+outcomes stay unpredictable: the player's future bumper positions are unknown (§5.3).
+
+### 18.2 Seed derivation (concretizes §6.1, §10.3)
+
+```
+regSeed  (uint32, Registrar-issued at /session/new — the pre-play commitment)
+gameSeed (uint32, client)
+wasmResult = buildWasm(regSeed) → compile → compute(gameSeed)        // uint32
+serverSeed = wasmResult.toString(16).padStart(64, "0")              // 64 hex
+```
+
+The Registrar's JS mirror `runSpec(regSeed, gameSeed)` reproduces `wasmResult`
+byte-identically (vector: `regSeed=305419896, gameSeed=12345 → 0x4B956F81`). WASM is
+the **Protected** layer (optional); verification can use the JS mirror without WASM.
+
+### 18.3 Stored audit trail = the recipe, not per-step state (concretizes §11)
+
+The public trail stores the **recipe** (seed + delta-compressed input), and outcomes
+are reproduced by **replay** — not by stored per-step hashes. Shipped record:
+
+```json
+{ "gameId": "...", "protocol": "UVS-2.0", "granularity": "ALL",
+  "regSeed": 0, "gameSeed": 0, "serverSeed": "...", "commitment": "SHA-256(serverSeed)",
+  "numBalls": 0, "betPerBall": 0, "mode": "human|stationary|...", "totalWin": 0,
+  "ticks": 0, "inputLen": 0, "inputLog": [ { "t": 0, "target": { "x": 0, "y": 0 } } ], "ts": 0 }
+```
+
+- `inputLog` is **delta-encoded** (sparse — only ticks where the target changed;
+  `expandInputLog` rebuilds the dense per-tick array).
+- `gameId = SHA-256( serverSeed + ":" + SHA-256( JSON.stringify(compressedInputLog) ) )`.
+- The per-step `{stateHash, rngCalls}` of §11.2 is an **optional in-play diagnostic**
+  (the client `eventLog`, sampled on event ticks; the Registrar uses it only to report
+  the *first* point of divergence). It is **not** part of the stored trail.
+
+### 18.4 Verification is self-contained; the Registrar is optional for it (updates §6.2)
+
+Third-party verification runs entirely on the client / any page holding the engine,
+**without trusting the Registrar**:
+
+1. **Seed check** — rebuild WASM (or run JS `runSpec`) from `regSeed`; confirm `serverSeed`.
+2. **Result check** — replay the engine over `inputLog`; confirm `totalWin` equals the recorded value.
+
+The Registrar's `/verify/paddla` performs the *same* replay as optional corroboration
+and writes the trail; it is **not required for trust**. The Registrar's irreducible
+roles are (i) **commitment authority** — issuing `regSeed` *before* play, so the
+operator cannot pick the seed after the bet — and (ii) **trail host**. Therefore
+"Registrar optional" holds **for verification**; it does **not** hold for the pre-play
+commit, which *something* must provide (the Registrar, or a public beacon such as
+**drand** — see §18.6).
+
+### 18.5 Version negotiation (concretizes §3.5)
+
+Supported set is `[1, 2]`. **v2 is wire-identical to v1** — a renumber that aligns the
+negotiated integer and `uvsHeader.uvsVersion` with the shipped "UVS 2.0" profile;
+nothing branches on the version. v1 sessions and trail records remain valid and replay
+identically. New clients request `[1, 2]` → negotiate **2**; legacy clients requesting
+`[1]` still negotiate **1**.
+
+### 18.6 Determinism & trust conformance (§3.1, §13, §17)
+
+- **Determinism audit (passed).** 300 sessions · 454,716 ticks · 4 input policies →
+  result **and full state** reproduced byte-identically every replay, with no
+  module-level state leakage. The per-tick fresh-PRNG design (reseed from
+  `serverSeed + position + tick` each tick) structurally precludes the running-stream
+  desync class — no un-logged RNG consumption can drift a replay. The only
+  non-deterministic value, `uvsHeader.timestamp`, is inert metadata excluded from every
+  hash (`gameId` derives from `serverSeed` + `inputLog` only).
+- **Trust tier (derived, not claimed).** The current live PADDLA trail is self-hosted
+  and **unanchored** → honest tier 🟡 (committed seed via Registrar, no external anchor).
+  Binding the commit to a future **drand** round (League of Entropy) raises this toward
+  🟢 and is what makes "the operator couldn't pick the seed after the bet" externally
+  provable rather than self-asserted. See `SPEC-trust-tiers.md`.
+
+---
+
+*UVS v2 · Uncloned Math · April 2026 (impl. reconciliation June 2026) · [uncloned.work](https://uncloned.work)*
 
 *Constantin Razinsky · constr@gmail.com · Telegram: [@constrik](https://t.me/constrik)*
