@@ -1,0 +1,31 @@
+{
+  "serverSeed": "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8091a2b3c4d5e6f70811223344556",
+  "drand": {
+    "round": 29286636,
+    "randomness": "e8d0543d60b639cf02775d16d8bc66f281b7bcbdf59706f29a1684889f8b9548"
+  },
+  "participants": [
+    "TICKET-0001",
+    "TICKET-0002",
+    "TICKET-0003",
+    "TICKET-0004",
+    "TICKET-0005",
+    "TICKET-0006",
+    "TICKET-0007",
+    "TICKET-0008",
+    "TICKET-0009",
+    "TICKET-0010",
+    "TICKET-0011",
+    "TICKET-0012",
+    "TICKET-0013",
+    "TICKET-0014",
+    "TICKET-0015",
+    "TICKET-0016",
+    "TICKET-0017",
+    "TICKET-0018",
+    "TICKET-0019",
+    "TICKET-0020"
+  ],
+  "winners": 5,
+  "prizeLabel": "SEAT"
+}
