@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Results · UVS verifiable allocation</title>
+<style>
+  :root{ --bg:#0e1116; --panel:#171b22; --line:#262c36; --ink:#e8edf4; --dim:#8b95a5;
+    --gold:#f2c14e; --purple:#b06efe; --blue:#6ea8fe; --grey:#8b95a5; --green:#34d17e; --red:#ff5d6c; }
+  *{box-sizing:border-box}
+  body{margin:0;background:radial-gradient(1200px 600px at 50% -10%,#1a2230,#0e1116);color:var(--ink);
+    font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;min-height:100vh;
+    display:flex;flex-direction:column;align-items:center;padding:24px}
+  .wrap{width:100%;max-width:680px}
+  #errbar{display:none;background:#3a1014;border:1px solid #ff5d6c;color:#ffd7db;padding:10px 12px;border-radius:10px;margin-bottom:12px;font:12px ui-monospace,monospace;word-break:break-all}
+  header{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px}
+  h1{font-size:19px;margin:0;letter-spacing:.2px}
+  .badge{font-size:11px;color:#bfe3c9;background:rgba(52,209,126,.12);border:1px solid rgba(52,209,126,.4);padding:3px 9px;border-radius:999px;font-weight:600}
+  .tag{font-size:12.5px;color:var(--dim);margin:0 0 16px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px 16px;margin-bottom:14px}
+  .card h2{font-size:11px;text-transform:uppercase;letter-spacing:.7px;color:var(--dim);margin:0 0 11px;font-weight:700}
+  .find{display:flex;gap:8px;flex-wrap:wrap}
+  .find input{flex:1;min-width:150px;padding:9px 11px;border-radius:9px;border:1px solid var(--line);background:#11151b;color:var(--ink);font-family:ui-monospace,monospace}
+  .find button{padding:9px 15px;border-radius:9px;border:1px solid var(--line);background:#11151b;color:var(--ink);cursor:pointer;font-weight:600}
+  .findOut{font-size:13px;margin-top:10px;min-height:18px}
+  .chips{display:flex;gap:8px;flex-wrap:wrap}
+  .chip{padding:8px 12px;border-radius:11px;border:1px solid var(--line);background:#11151b;cursor:pointer;font-size:13px;display:flex;flex-direction:column;gap:1px;min-width:96px}
+  .chip.on{border-color:var(--ink)}
+  .chip .t{font-weight:700} .chip .n{font-size:11px;color:var(--dim);font-variant-numeric:tabular-nums}
+  .list{margin-top:12px;max-height:360px;overflow:auto;border:1px solid var(--line);border-radius:10px;background:#0f141b}
+  .row{display:flex;gap:10px;align-items:center;padding:7px 12px;border-bottom:1px solid #181d26;cursor:pointer;font-size:13px}
+  .row:hover{background:#131922}
+  .row .rk{color:var(--dim);width:54px;font-variant-numeric:tabular-nums;font-size:12px}
+  .row .id{font-family:ui-monospace,monospace;flex:1}
+  .row .pz{font-weight:600}
+  .row .sc{display:none;font-family:ui-monospace,monospace;font-size:11px;color:var(--dim);width:100%;padding-top:4px}
+  .row.open .sc{display:block}
+  .more{padding:9px 12px;color:var(--dim);font-size:12px;text-align:center}
+  .kv{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;color:var(--dim);word-break:break-all;margin:8px 0}
+  .kv b{color:var(--ink)} .kv a{color:var(--blue)}
+  details{background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:12px 15px;margin-bottom:12px}
+  summary{cursor:pointer;color:var(--blue);font-weight:600;font-size:13px}
+  .mut{color:#6b7686;font-size:12px;line-height:1.5}
+  .verifiers a{display:inline-block;margin:4px 8px 0 0;padding:5px 10px;border:1px solid var(--line);border-radius:8px;color:var(--blue);text-decoration:none;font-size:12px}
+  button.drand{margin-left:6px;padding:3px 9px;border-radius:7px;border:1px solid var(--line);background:#11151b;color:var(--blue);cursor:pointer;font:inherit;font-size:12px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div id="errbar"></div>
+  <header><h1>🎁 <span id="title">Results</span></h1><span class="badge">UVS · verifiable</span></header>
+  <p class="tag">A completed draw. The operator published the rates; this list is the <b>actual outcome</b>,
+    deterministically derived from a committed seed + a public <b>drand</b> round. Browse it, find your own number, or re-derive it with any verifier below.</p>
+
+  <div class="card">
+    <h2>Find your result</h2>
+    <div class="find">
+      <input id="findId" placeholder="your number, e.g. PULL-01234">
+      <button id="findBtn">check</button>
+    </div>
+    <div class="findOut" id="findOut"></div>
+  </div>
+
+  <div class="card">
+    <h2>By tier — click to list the winners</h2>
+    <div class="chips" id="chips"></div>
+    <div class="list" id="list" style="display:none"></div>
+  </div>
+
+  <details id="proof">
+    <summary>The proof — seed, drand round, and how to re-derive</summary>
+    <div class="kv"><b>serverSeed</b> (committed before the draw)<br><span id="pSeed">—</span></div>
+    <div class="kv"><b>drand round</b> <span id="pDrand">—</span></div>
+    <div class="kv"><b>combinedSeed</b> = SHA-256(serverSeed : drandRandomness)<br><span id="pComb">—</span></div>
+    <div class="mut" style="margin:8px 0">Each entry's rank = <code>SHA-256(combinedSeed : id)</code>, sorted high→low; the published
+      prize pool is dealt onto that order. Same input → same list, on any machine.</div>
+    <div class="kv"><b>re-derive with an independent verifier</b> (no shared code — all reproduce the same list):</div>
+    <div class="verifiers">
+      <a href="https://github.com/constarik/uvs/blob/master/verifiers/draw-verify.js" target="_blank" rel="noopener">JS</a>
+      <a href="https://github.com/constarik/uvs/blob/master/verifiers/draw_verify.py" target="_blank" rel="noopener">Python</a>
+      <a href="https://github.com/constarik/uvs/blob/master/verifiers/DrawVerify.java" target="_blank" rel="noopener">Java</a>
+      <a href="https://github.com/constarik/uvs/blob/master/verifiers/draw_verify.cpp" target="_blank" rel="noopener">C++</a>
+      <a href="https://github.com/constarik/uvs/tree/master/verifiers" target="_blank" rel="noopener">+ test-vectors</a>
+    </div>
+  </details>
+
+  <details id="limits">
+    <summary>What this proves — and what it doesn't</summary>
+    <div class="mut">You can confirm <b>your own result is real</b> (find your number → re-derive it) and that the
+      shown winners are genuine. The remaining trust — that <b>no entries were hidden</b> and the participant list is
+      complete — rests on the list being public and append-only (the trail-immutability layer). Browse + spot-check is the
+      human part; completeness is the trail's.</div>
+  </details>
+</div>
+<script>
+window.onerror=function(m,s,l,c,e){var b=document.getElementById('errbar');if(b){b.style.display='block';b.textContent='⚠ '+((e&&e.message)||m)+'  @'+l+':'+c;}return false;};
+
+/* bundled SHA-256 (ASCII/byte string) — verified byte-identical to the JS/Python/Java/C++ verifiers */
+function sha256hex(ascii){
+  function rrot(x,n){return (x>>>n)|(x<<(32-n));}
+  var mathPow=Math.pow,maxWord=mathPow(2,32),result='';
+  var words=[],asciiBitLength=ascii.length*8;
+  var hash=sha256hex.h=sha256hex.h||[],k=sha256hex.k=sha256hex.k||[],primeCounter=k.length;
+  var isComposite={};
+  for(var candidate=2;primeCounter<64;candidate++){
+    if(!isComposite[candidate]){
+      for(var i=0;i<313;i+=candidate){isComposite[i]=candidate;}
+      hash[primeCounter]=(mathPow(candidate,0.5)*maxWord)|0;
+      k[primeCounter++]=(mathPow(candidate,1/3)*maxWord)|0;
+    }
+  }
+  ascii+='\x80'; while(ascii.length%64-56)ascii+='\x00';
+  for(var i=0;i<ascii.length;i++){var j=ascii.charCodeAt(i); if(j>>8){return null;} words[i>>2]|=j<<((3-i)%4)*8;}
+  words[words.length]=((asciiBitLength/maxWord)|0); words[words.length]=(asciiBitLength);
+  for(var jj=0;jj<words.length;){
+    var w=words.slice(jj,jj+=16),oldHash=hash; hash=hash.slice(0,8);
+    for(var i=0;i<64;i++){
+      var w15=w[i-15],w2=w[i-2],a=hash[0],e=hash[4];
+      var temp1=hash[7]+(rrot(e,6)^rrot(e,11)^rrot(e,25))+((e&hash[5])^((~e)&hash[6]))+k[i]
+        +(w[i]=(i<16)?w[i]:(w[i-16]+(rrot(w15,7)^rrot(w15,18)^(w15>>>3))+w[i-7]+(rrot(w2,17)^rrot(w2,19)^(w2>>>10)))|0);
+      var temp2=(rrot(a,2)^rrot(a,13)^rrot(a,22))+((a&hash[1])^(a&hash[2])^(hash[1]&hash[2]));
+      hash=[(temp1+temp2)|0].concat(hash); hash[4]=(hash[4]+temp1)|0;
+    }
+    for(var i=0;i<8;i++){hash[i]=(hash[i]+oldHash[i])|0;}
+  }
+  for(var i=0;i<8;i++){for(var j=3;j+1;j--){var b=(hash[i]>>(j*8))&255; result+=((b<16)?0:'')+b.toString(16);}}
+  return result;
+}
+function hexToBin(h){var s='';for(var i=0;i<h.length;i+=2)s+=String.fromCharCode(parseInt(h.substr(i,2),16));return s;}
+function randomnessOfSig(sig){return sha256hex(hexToBin(sig));}
+var CHAIN='52db9ba70e0cc0f6eaf7803dd07447a1f5477735fd3f661792ba94600c84e971';
+var SOURCES=[
+  function(R){return 'https://drand.cloudflare.com/'+CHAIN+'/public/'+R;},
+  function(R){return 'https://api.drand.sh/'+CHAIN+'/public/'+R;}
+];
+
+/* ── a fixed, completed draw (same algorithm as the reference verifiers) ── */
+var REC={ title:'Banner #1 — published drop rates',
+  serverSeed:'a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8091a2b3c4d5e6f70811223344556',
+  drand:{round:29286636, randomness:'e8d0543d60b639cf02775d16d8bc66f281b7bcbdf59706f29a1684889f8b9548'},
+  M:2000, prefix:'PULL-', pad:5,
+  tiers:[{key:'legendary',label:'Legendary',count:20,color:'#f2c14e'},
+         {key:'epic',label:'Epic',count:180,color:'#b06efe'},
+         {key:'rare',label:'Rare',count:600,color:'#6ea8fe'},
+         {key:'common',label:'Common',count:1200,color:'#8b95a5'}] };
+var $=function(id){return document.getElementById(id);};
+function idOf(i){return REC.prefix+String(i+1).padStart(REC.pad,'0');}
+
+var combined=sha256hex(REC.serverSeed+':'+REC.drand.randomness);
+var ranked=[], byId={};
+(function(){
+  var arr=[]; for(var i=0;i<REC.M;i++){var id=idOf(i); arr.push({id:id,score:sha256hex(combined+':'+id)});}
+  arr.sort(function(a,b){ if(a.score>b.score)return -1; if(a.score<b.score)return 1; return a.id<b.id?-1:a.id>b.id?1:0; });
+  var cum=[],c=0; REC.tiers.forEach(function(t){c+=t.count;cum.push(c);});
+  function tierAtRank(rank){ for(var j=0;j<REC.tiers.length;j++){ if(rank<=cum[j]) return REC.tiers[j]; } return REC.tiers[REC.tiers.length-1]; }
+  for(var i=0;i<arr.length;i++){ var row={rank:i+1,id:arr[i].id,score:arr[i].score,tier:tierAtRank(i+1)}; ranked.push(row); byId[arr[i].id]=row; }
+})();
+
+$('title').textContent=REC.title;
+$('pSeed').textContent=REC.serverSeed;
+$('pComb').textContent=combined;
+var DURL='https://api.drand.sh/'+CHAIN+'/public/'+REC.drand.round;
+$('pDrand').innerHTML='round <b>'+REC.drand.round+'</b> · randomness <b>'+REC.drand.randomness.slice(0,16)+'…</b> '
+  +'<button class="drand" onclick="verifyDrand()">✓ verify drand</button> <a href="'+DURL+'" target="_blank" rel="noopener" style="font-size:11px">raw ↗</a>'
+  +'<div id="drandVerdict" style="font-size:12px;margin-top:6px"></div>';
+
+(function(){
+  var box=$('chips'); box.innerHTML='';
+  REC.tiers.forEach(function(t){
+    var p=100*t.count/REC.M, pct=p<10?p.toFixed(2):p.toFixed(1);
+    var el=document.createElement('div'); el.className='chip'; el.setAttribute('data-key',t.key);
+    el.innerHTML='<span class="t" style="color:'+t.color+'">'+t.label+'</span><span class="n">'+t.count.toLocaleString()+' · '+pct+'%</span>';
+    el.onclick=function(){ showTier(t.key); var cs=document.querySelectorAll('.chip'); for(var i=0;i<cs.length;i++) cs[i].classList.toggle('on', cs[i].getAttribute('data-key')===t.key); };
+    box.appendChild(el);
+  });
+})();
+function showTier(key){
+  var rows=ranked.filter(function(r){return r.tier.key===key;}), lim=200, html='';
+  for(var i=0;i<Math.min(rows.length,lim);i++){ var r=rows[i];
+    html+='<div class="row" onclick="this.classList.toggle(\'open\')"><span class="rk">#'+r.rank+'</span><span class="id">'+r.id+'</span><span class="pz" style="color:'+r.tier.color+'">'+r.tier.label+'</span><span class="sc">score = SHA-256(combined:'+r.id+') = '+r.score+'</span></div>';
+  }
+  if(rows.length>lim) html+='<div class="more">showing '+lim+' of '+rows.length.toLocaleString()+' — use “Find your result” for a specific number</div>';
+  var L=$('list'); L.innerHTML=html; L.style.display='block';
+}
+$('findBtn').onclick=function(){
+  var id=($('findId').value||'').trim().toUpperCase();
+  var re=new RegExp('^'+REC.prefix.replace('-','\\-')+'\\d{'+REC.pad+'}$');
+  if(!re.test(id)){ $('findOut').innerHTML='<span style="color:var(--dim)">format: '+REC.prefix+'00001 … '+idOf(REC.M-1)+'</span>'; return; }
+  var r=byId[id];
+  if(!r){ $('findOut').innerHTML='<span style="color:var(--red)">'+id+' is not in this draw’s participant list.</span>'; return; }
+  $('findOut').innerHTML=id+' → <b style="color:'+r.tier.color+'">'+r.tier.label+'</b> · rank '+r.rank.toLocaleString()+' of '+REC.M.toLocaleString()
+    +'<br><span class="kv" style="margin:4px 0">SHA-256(combined:'+id+') = '+r.score.slice(0,24)+'… → '+r.tier.label+'</span>';
+};
+async function verifyDrand(){
+  var out=$('drandVerdict'); out.innerHTML='checking drand…'; var fetched=null;
+  for(var s=0;s<SOURCES.length;s++){ try{ var res=await fetch(SOURCES[s](REC.drand.round));
+    if(res&&res.ok){ var j=await res.json(); if(j&&j.signature){ fetched=j.randomness||randomnessOfSig(j.signature); break; } } }catch(e){} }
+  if(!fetched){ out.innerHTML='<span style="color:var(--red)">couldn\'t reach drand — open the raw link</span>'; return; }
+  out.innerHTML=(fetched===REC.drand.randomness)
+    ? '<span style="color:var(--green)">✓ Confirmed: drand round '+REC.drand.round+' publicly has exactly this randomness. This draw used the real public value — it could not be invented or pre-picked.</span>'
+    : '<span style="color:var(--red)">✗ MISMATCH: drand says '+fetched.slice(0,16)+'…, the record claims '+REC.drand.randomness.slice(0,16)+'…</span>';
+}
+showTier('legendary'); var first=document.querySelector('.chip'); if(first) first.classList.add('on');
+</script>
+</body>
+</html>
