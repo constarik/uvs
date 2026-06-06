@@ -178,6 +178,19 @@ var SOURCES=[
   function(R){return 'https://api.drand.sh/'+QUICKNET.chainHash+'/public/'+R;},
   function(R){return 'https://api.drand.sh/v2/beacons/quicknet/rounds/'+R;}
 ];
+async function verifyDrand(){
+  var c=window.__dr; if(!c) return;
+  var out=$('drandVerdict'); out.innerHTML='checking drand…';
+  var fetched=null;
+  for(var s=0;s<SOURCES.length;s++){
+    try{ var res=await fetch(SOURCES[s](c.round));
+      if(res&&res.ok){ var j=await res.json(); if(j&&j.signature){ fetched=j.randomness||randomnessOfSig(j.signature); break; } } }catch(e){}
+  }
+  if(!fetched){ out.innerHTML='<span style="color:#ff5d6c">couldn\'t reach drand to confirm — open the raw link and check by hand</span>'; return; }
+  out.innerHTML = (fetched===c.used)
+    ? '<span style="color:#34d17e">✓ Confirmed: drand round '+c.round+' publicly has exactly this randomness. The draw used the real public value — it could not invent it or pre-pick it.</span>'
+    : '<span style="color:#ff5d6c">✗ MISMATCH: drand says '+fetched.slice(0,16)+'…, the draw used '+c.used.slice(0,16)+'… — do not trust this draw.</span>';
+}
 async function pollRound(R){
   for(var tries=0;tries<25;tries++){
     for(var s=0;s<SOURCES.length;s++){
@@ -204,7 +217,11 @@ async function runDraw(){
   $('status').innerHTML='List of '+M.toLocaleString()+' fixed & committed, secret seed committed. Winner randomness bound to <b>drand round '+fr.round+'</b> (doesn\'t exist yet).';
   var rnd; try{rnd=await pollRound(fr.round);}catch(e){$('status').innerHTML='<span style="color:var(--red)">drand unreachable: '+e.message+'</span>';$('go').disabled=false;return;}
   var url='https://api.drand.sh/'+QUICKNET.chainHash+'/public/'+fr.round;
-  $('drandLine').innerHTML='round <b>'+fr.round+'</b> · randomness <b>'+rnd.randomness.slice(0,16)+'…</b> · <a href="'+url+'" target="_blank" rel="noopener">verify ↗</a>';
+  $('drandLine').innerHTML='round <b>'+fr.round+'</b> · randomness <b>'+rnd.randomness.slice(0,16)+'…</b> '
+    + '<button onclick="verifyDrand()" style="margin-left:6px;padding:3px 9px;border-radius:7px;border:1px solid #262c36;background:#11151b;color:#6ea8fe;cursor:pointer;font:inherit;font-size:12px">✓ verify drand</button> '
+    + '<a href="'+url+'" target="_blank" rel="noopener" style="font-size:11px;color:#8b95a5">raw ↗</a>'
+    + '<div id="drandVerdict" style="font-size:12px;margin-top:6px"></div>';
+  window.__dr={round:fr.round,used:rnd.randomness};
   $('status').innerHTML='<span class="ok">drand round '+fr.round+' in.</span> Drawing '+N.toLocaleString()+' of '+M.toLocaleString()+'…';
   await new Promise(function(r){setTimeout(r,30);});
   var combined=combine(serverSeed,rnd.randomness);
