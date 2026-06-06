@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Verifiable Odds · UVS + drand</title>
+<style>
+  :root{ --bg:#0e1116; --panel:#171b22; --line:#262c36; --ink:#e8edf4; --dim:#8b95a5;
+    --gold:#f2c14e; --purple:#b06efe; --blue:#6ea8fe; --green:#34d17e; --red:#ff5d6c; }
+  *{box-sizing:border-box}
+  body{margin:0;background:radial-gradient(1200px 600px at 50% -10%,#1a2230,#0e1116);color:var(--ink);
+    font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;min-height:100vh;
+    display:flex;flex-direction:column;align-items:center;padding:24px}
+  .wrap{width:100%;max-width:620px}
+  #errbar{display:none;background:#3a1014;border:1px solid #ff5d6c;color:#ffd7db;padding:10px 12px;
+    border-radius:10px;margin-bottom:12px;font:12px ui-monospace,monospace;word-break:break-all}
+  header{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+  h1{font-size:20px;margin:0;letter-spacing:.3px}
+  .badge{font-size:11px;color:#bfe3c9;background:rgba(52,209,126,.12);border:1px solid rgba(52,209,126,.4);
+    padding:3px 9px;border-radius:999px;font-weight:600}
+  .tag{font-size:12.5px;color:var(--dim);margin:0 0 16px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:16px 18px;margin-bottom:14px}
+  .card h2{font-size:12px;text-transform:uppercase;letter-spacing:.7px;color:var(--dim);margin:0 0 12px;font-weight:700}
+  .rate{display:flex;align-items:center;gap:10px;margin:7px 0}
+  .dot{width:11px;height:11px;border-radius:50%;flex:none}
+  .rate .nm{flex:1;font-weight:600}
+  .rate .pc{font-variant-numeric:tabular-nums;color:var(--dim)}
+  .controls{display:flex;gap:10px;align-items:center;margin-bottom:14px}
+  .seg{display:flex;gap:6px;flex:1}
+  .seg button{flex:1;padding:9px 0;border-radius:10px;border:1px solid var(--line);background:#11151b;color:var(--ink);font-weight:700;cursor:pointer}
+  .seg button.on{border-color:var(--blue);color:var(--blue);background:rgba(110,168,254,.08)}
+  .go{padding:12px 18px;border:0;border-radius:11px;font-size:15px;font-weight:800;letter-spacing:.3px;
+    background:linear-gradient(180deg,#6ea8fe,#4d86e0);color:#08101f;cursor:pointer;white-space:nowrap}
+  .go:disabled{opacity:.5;cursor:not-allowed}
+  .status{font-size:13px;color:var(--dim);min-height:20px;margin-bottom:6px}
+  .status b{color:var(--ink)} .status .wait{color:var(--gold)} .status .ok{color:var(--green)}
+  .bar{margin:11px 0}
+  .bar .top{display:flex;justify-content:space-between;font-size:13px;margin-bottom:5px}
+  .bar .top .nm{font-weight:600} .bar .top .nums{font-variant-numeric:tabular-nums;color:var(--dim)}
+  .track{position:relative;height:22px;background:#0f141b;border:1px solid var(--line);border-radius:7px;overflow:hidden}
+  .fill{height:100%;border-radius:6px 0 0 6px;transition:width .5s}
+  .claim{position:absolute;top:-3px;bottom:-3px;width:2px;background:#fff;opacity:.85}
+  .claim::after{content:'claim';position:absolute;top:-15px;left:-13px;font-size:9px;color:#fff;opacity:.7}
+  .verdict{font-size:15px;font-weight:800;margin-top:12px;min-height:22px}
+  .verdict.good{color:var(--green)}
+  details{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px 15px;margin-bottom:12px}
+  summary{cursor:pointer;color:var(--blue);font-weight:600;font-size:13px}
+  .kv{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;color:var(--dim);word-break:break-all;margin:9px 0}
+  .kv b{color:var(--ink);font-weight:600}
+  .kv a{color:var(--blue)}
+  .mut{color:#6b7686;font-size:12px;line-height:1.5}
+  .spot{display:flex;gap:8px;align-items:center;margin:8px 0;flex-wrap:wrap}
+  .spot input{width:90px;padding:6px 8px;border-radius:8px;border:1px solid var(--line);background:#11151b;color:var(--ink);font-family:ui-monospace,monospace}
+  .spot button{padding:6px 12px;border-radius:8px;border:1px solid var(--line);background:#11151b;color:var(--ink);cursor:pointer;font-weight:600}
+  table.vs{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:6px}
+  table.vs th,table.vs td{border:1px solid var(--line);padding:7px 9px;text-align:left;vertical-align:top}
+  table.vs th{color:var(--dim);font-weight:600}
+  table.vs td.r{color:var(--red)} table.vs td.g{color:var(--green)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div id="errbar"></div>
+  <header>
+    <h1>🎁 Verifiable Odds</h1>
+    <span class="badge">UVS + drand 🟢</span>
+  </header>
+  <p class="tag">The operator publishes drop rates. UVS lets <i>anyone</i> prove the rates actually held across
+    every draw — and a future <b>drand</b> round injects entropy the operator can't pre-pick. This is the thing
+    random.org and one-shot provably-fair <i>can't</i> do.</p>
+
+  <div class="card">
+    <h2>The published claim</h2>
+    <div id="rates"></div>
+  </div>
+
+  <div class="controls">
+    <div class="seg" id="seg"></div>
+    <button class="go" id="go">OPEN</button>
+  </div>
+  <div class="status" id="status">Pick a batch size and open — the outcome will be bound to a drand round that hasn't happened yet.</div>
+
+  <div class="card" id="resultCard" style="display:none">
+    <h2>Realized vs published</h2>
+    <div id="hist"></div>
+    <div class="verdict" id="verdict"></div>
+  </div>
+
+  <details id="proof" style="display:none">
+    <summary>Proof — check it yourself, independently</summary>
+    <div class="kv"><b>house commitment</b> (SHA-256 of a secret seed, fixed before the drand round)<br><span id="cmt">—</span></div>
+    <div class="kv"><b>drand round</b> <span id="drandLine">—</span></div>
+    <div class="kv"><b>house seed</b> (revealed after)<br><span id="hseed">—</span></div>
+    <div class="spot">
+      <span style="font-size:12.5px;color:var(--dim)">Re-derive any draw:</span>
+      <input id="spotIdx" type="number" min="0" value="0">
+      <button id="spotBtn">check</button>
+      <span class="kv" id="spotOut" style="margin:0"></span>
+    </div>
+    <div class="mut">Each draw: <code>seed_i = SHA-256(houseSeed : drandRandomness : i)</code>, then the published
+      weight table maps <code>seed_i</code> to a tier. Re-fetch the drand round from any mirror (link above),
+      recompute, and you reproduce every outcome. Because the house committed its seed <i>before</i> the drand
+      round existed, it couldn't grind seeds to fake a friendly-looking distribution.</div>
+  </details>
+
+  <details id="contrast">
+    <summary>Why random.org can't do this</summary>
+    <table class="vs">
+      <tr><th>On this task</th><th>random.org</th><th>UVS + drand</th></tr>
+      <tr><td>Prove one draw was random</td><td class="g">yes</td><td class="g">yes</td></tr>
+      <tr><td>Prove the <b>claimed rates</b> held over 10,000 draws</td><td class="r">no — it returns numbers, blind to the distribution</td><td class="g">yes — replay every draw, measure the histogram</td></tr>
+      <tr><td>Stop the operator cherry-picking seeds</td><td class="r">no — numbers are private to the operator's request</td><td class="g">yes — entropy from a public future drand round</td></tr>
+      <tr><td>Let a stranger re-check without trusting anyone</td><td class="r">trust one company</td><td class="g">re-fetch drand from any mirror; recompute locally</td></tr>
+    </table>
+    <div class="mut" style="margin-top:8px">Honest limit: this proves reality <i>matches the published claim</i>. If the
+      published rate itself is stingy, that's a separate (disclosure) problem — but now the claim is auditable instead of a promise.</div>
+  </details>
+</div>
+<script src="odds.js"></script>
+<script>
+window.onerror=function(m,s,l,c,e){var b=document.getElementById('errbar');
+  if(b){b.style.display='block';b.textContent='⚠ '+((e&&e.message)||m)+'  @'+l+':'+c;}return false;};
+
+/* ---- inline math (self-contained; identical to odds.js, which the node test uses) ---- */
+function sha256hex(ascii){
+  function rrot(x,n){return (x>>>n)|(x<<(32-n));}
+  var mathPow=Math.pow,maxWord=mathPow(2,32),result='';
+  var words=[],asciiBitLength=ascii.length*8;
+  var hash=sha256hex.h=sha256hex.h||[],k=sha256hex.k=sha256hex.k||[],primeCounter=k.length;
+  var isComposite={};
+  for(var candidate=2;primeCounter<64;candidate++){
+    if(!isComposite[candidate]){
+      for(var i=0;i<313;i+=candidate){isComposite[i]=candidate;}
+      hash[primeCounter]=(mathPow(candidate,0.5)*maxWord)|0;
+      k[primeCounter++]=(mathPow(candidate,1/3)*maxWord)|0;
+    }
+  }
+  ascii+='\x80'; while(ascii.length%64-56)ascii+='\x00';
+  for(var i=0;i<ascii.length;i++){var j=ascii.charCodeAt(i); if(j>>8){return null;} words[i>>2]|=j<<((3-i)%4)*8;}
+  words[words.length]=((asciiBitLength/maxWord)|0); words[words.length]=(asciiBitLength);
+  for(var jj=0;jj<words.length;){
+    var w=words.slice(jj,jj+=16),oldHash=hash; hash=hash.slice(0,8);
+    for(var i=0;i<64;i++){
+      var w15=w[i-15],w2=w[i-2],a=hash[0],e=hash[4];
+      var temp1=hash[7]+(rrot(e,6)^rrot(e,11)^rrot(e,25))+((e&hash[5])^((~e)&hash[6]))+k[i]
+        +(w[i]=(i<16)?w[i]:(w[i-16]+(rrot(w15,7)^rrot(w15,18)^(w15>>>3))+w[i-7]+(rrot(w2,17)^rrot(w2,19)^(w2>>>10)))|0);
+      var temp2=(rrot(a,2)^rrot(a,13)^rrot(a,22))+((a&hash[1])^(a&hash[2])^(hash[1]&hash[2]));
+      hash=[(temp1+temp2)|0].concat(hash); hash[4]=(hash[4]+temp1)|0;
+    }
+    for(var i=0;i<8;i++){hash[i]=(hash[i]+oldHash[i])|0;}
+  }
+  for(var i=0;i<8;i++){for(var j=3;j+1;j--){var b=(hash[i]>>(j*8))&255; result+=((b<16)?0:'')+b.toString(16);}}
+  return result;
+}
+function hexToBin(h){var s='';for(var i=0;i<h.length;i+=2)s+=String.fromCharCode(parseInt(h.substr(i,2),16));return s;}
+function randomnessOfSig(sig){return sha256hex(hexToBin(sig));}
+var QUICKNET={period:3,genesis:1692803367,chainHash:'52db9ba70e0cc0f6eaf7803dd07447a1f5477735fd3f661792ba94600c84e971'};
+function roundAt(t){return Math.floor((t-QUICKNET.genesis)/QUICKNET.period)+1;}
+function timeOfRound(r){return QUICKNET.genesis+(r-1)*QUICKNET.period;}
+function futureRound(now,ahead){var r=roundAt(now)+Math.max(1,Math.ceil((ahead||9)/QUICKNET.period));return {round:r,time:timeOfRound(r)};}
+var RATES=[{key:'legendary',label:'Legendary',pct:1,color:'#f2c14e'},
+  {key:'epic',label:'Epic',pct:9,color:'#b06efe'},
+  {key:'rare',label:'Rare',pct:30,color:'#6ea8fe'},
+  {key:'common',label:'Common',pct:60,color:'#8b95a5'}];
+function weightedPick(seed,rates){var u=parseInt(seed.slice(0,13),16)/Math.pow(2,52),c=0;
+  for(var i=0;i<rates.length;i++){c+=rates[i].pct/100; if(u<c)return i;} return rates.length-1;}
+function drawSeed(house,rand,i){return sha256hex(house+':'+rand+':'+i);}
+function randHex(n){var a=new Uint8Array(n); if(window.crypto&&crypto.getRandomValues)crypto.getRandomValues(a);
+  else for(var i=0;i<n;i++)a[i]=Math.floor(Math.random()*256);
+  return [].map.call(a,function(b){return b.toString(16).padStart(2,'0');}).join('');}
+
+/* ---- app ---- */
+var $=function(id){return document.getElementById(id);};
+var N=1000;
+function renderRates(){ var box=$('rates'); box.innerHTML='';
+  RATES.forEach(function(r){ var d=document.createElement('div'); d.className='rate';
+    d.innerHTML='<span class="dot" style="background:'+r.color+'"></span><span class="nm">'+r.label+'</span><span class="pc">'+r.pct+'%</span>';
+    box.appendChild(d); }); }
+function renderSeg(){ var s=$('seg'); s.innerHTML='';
+  [100,1000,10000].forEach(function(v){ var b=document.createElement('button'); b.className=(v===N?'on':'');
+    b.textContent=v.toLocaleString(); b.onclick=function(){N=v;renderSeg();}; s.appendChild(b); }); }
+
+var SOURCES=[
+  function(R){return 'https://drand.cloudflare.com/'+QUICKNET.chainHash+'/public/'+R;},
+  function(R){return 'https://api.drand.sh/'+QUICKNET.chainHash+'/public/'+R;},
+  function(R){return 'https://api.drand.sh/v2/beacons/quicknet/rounds/'+R;}
+];
+async function pollRound(R){
+  for(var tries=0;tries<25;tries++){
+    for(var s=0;s<SOURCES.length;s++){
+      try{ var res=await fetch(SOURCES[s](R));
+        if(res && res.ok){ var j=await res.json(); if(j && j.signature)
+          return {signature:j.signature, randomness:j.randomness||randomnessOfSig(j.signature)}; } }
+      catch(e){}
+    }
+    var due=timeOfRound(R)-Date.now()/1000;
+    $('status').innerHTML='Waiting for <b>drand round '+R+'</b> (due in ~'+Math.max(0,Math.ceil(due))+'s)…';
+    await new Promise(function(r){setTimeout(r,1500);});
+  }
+  throw new Error('round '+R+' unavailable');
+}
+function renderHist(counts){
+  var hist=$('hist'); hist.innerHTML=''; var maxDev=0;
+  RATES.forEach(function(r,i){
+    var realized=100*counts[i]/N, dev=Math.abs(realized-r.pct); if(dev>maxDev)maxDev=dev;
+    var el=document.createElement('div'); el.className='bar';
+    el.innerHTML='<div class="top"><span class="nm" style="color:'+r.color+'">'+r.label+'</span>'+
+      '<span class="nums">'+counts[i].toLocaleString()+' · '+realized.toFixed(2)+'% <span style="color:#6b7686">(claim '+r.pct+'%)</span></span></div>'+
+      '<div class="track"><div class="fill" style="width:'+Math.min(100,realized)+'%;background:'+r.color+'"></div>'+
+      '<div class="claim" style="left:'+Math.min(100,r.pct)+'%"></div></div>';
+    hist.appendChild(el);
+  });
+  var tol=(N<1000?4:N<10000?1.5:0.7), close=maxDev<tol;
+  $('verdict').className='verdict '+(close?'good':'');
+  $('verdict').textContent=close
+    ? '✓ Realized rates match the published claim (max gap '+maxDev.toFixed(2)+'%). More draws → tighter.'
+    : 'Gap '+maxDev.toFixed(2)+'% — small batches wobble; open 10,000 to watch it converge.';
+}
+async function openBoxes(){
+  $('go').disabled=true; $('resultCard').style.display='none'; $('verdict').textContent='';
+  var houseSeed=randHex(32), commitment=sha256hex(houseSeed);
+  $('cmt').textContent=commitment; $('hseed').textContent='— revealed after the draw —';
+  $('proof').style.display='block';
+  var now=Date.now()/1000, fr=futureRound(now,9);
+  $('drandLine').innerHTML='round <b>'+fr.round+'</b> — not yet published, waiting…';
+  $('status').innerHTML='Committed a secret seed. Bound to <b>drand round '+fr.round+'</b> (doesn\'t exist yet) so it can\'t be cherry-picked.';
+  var rnd;
+  try{ rnd=await pollRound(fr.round); }
+  catch(e){ $('status').innerHTML='<span style="color:var(--red)">drand unreachable: '+e.message+' (need internet)</span>'; $('go').disabled=false; return; }
+  var url='https://api.drand.sh/'+QUICKNET.chainHash+'/public/'+fr.round;
+  $('drandLine').innerHTML='round <b>'+fr.round+'</b> · randomness <b>'+rnd.randomness.slice(0,16)+'…</b> · <a href="'+url+'" target="_blank" rel="noopener">verify ↗</a>';
+  $('status').innerHTML='<span class="ok">drand round '+fr.round+' published.</span> Computing '+N.toLocaleString()+' draws…';
+  await new Promise(function(r){setTimeout(r,30);});
+  var counts=[0,0,0,0];
+  for(var i=0;i<N;i++) counts[weightedPick(drawSeed(houseSeed,rnd.randomness,i),RATES)]++;
+  $('hseed').textContent=houseSeed;
+  window.__ctx={houseSeed:houseSeed,randomness:rnd.randomness};
+  renderHist(counts); $('resultCard').style.display='block';
+  $('status').innerHTML='<span class="ok">Done.</span> Every draw is independently replayable from the seed + drand round.';
+  $('go').disabled=false;
+}
+$('spotBtn').onclick=function(){
+  var ctx=window.__ctx; if(!ctx){$('spotOut').textContent='open a batch first';return;}
+  var i=parseInt($('spotIdx').value)||0; if(i<0)i=0; if(i>=N)i=N-1; $('spotIdx').value=i;
+  var seed=drawSeed(ctx.houseSeed,ctx.randomness,i), t=RATES[weightedPick(seed,RATES)];
+  $('spotOut').innerHTML='draw #'+i+' → <b style="color:'+t.color+'">'+t.label+'</b> · seed '+seed.slice(0,12)+'…';
+};
+renderRates(); renderSeg(); $('go').onclick=openBoxes;
+</script>
+</body>
+</html>
