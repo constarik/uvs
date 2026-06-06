@@ -16,7 +16,10 @@
   header{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px}
   h1{font-size:19px;margin:0;letter-spacing:.2px}
   .badge{font-size:11px;color:#bfe3c9;background:rgba(52,209,126,.12);border:1px solid rgba(52,209,126,.4);padding:3px 9px;border-radius:999px;font-weight:600}
-  .tag{font-size:12.5px;color:var(--dim);margin:0 0 16px}
+  .tag{font-size:12.5px;color:var(--dim);margin:0 0 14px}
+  .modelbar{display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap}
+  .modelbar label{font-size:12px;color:var(--dim)}
+  .modelbar select{padding:8px 11px;border-radius:9px;border:1px solid var(--line);background:#11151b;color:var(--ink);font:inherit;cursor:pointer}
   .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px 16px;margin-bottom:14px}
   .card h2{font-size:11px;text-transform:uppercase;letter-spacing:.7px;color:var(--dim);margin:0 0 11px;font-weight:700}
   .find{display:flex;gap:8px;flex-wrap:wrap}
@@ -28,7 +31,7 @@
   .chip.on{border-color:var(--ink)}
   .chip .t{font-weight:700} .chip .n{font-size:11px;color:var(--dim);font-variant-numeric:tabular-nums}
   .list{margin-top:12px;max-height:360px;overflow:auto;border:1px solid var(--line);border-radius:10px;background:#0f141b}
-  .row{display:flex;gap:10px;align-items:center;padding:7px 12px;border-bottom:1px solid #181d26;cursor:pointer;font-size:13px}
+  .row{display:flex;gap:10px;align-items:center;padding:7px 12px;border-bottom:1px solid #181d26;cursor:pointer;font-size:13px;flex-wrap:wrap}
   .row:hover{background:#131922}
   .row .rk{color:var(--dim);width:54px;font-variant-numeric:tabular-nums;font-size:12px}
   .row .id{font-family:ui-monospace,monospace;flex:1}
@@ -48,21 +51,27 @@
 <body>
 <div class="wrap">
   <div id="errbar"></div>
-  <header><h1>🎁 <span id="title">Results</span></h1><span class="badge">UVS · verifiable</span></header>
-  <p class="tag">A completed draw. The operator published the rates; this list is the <b>actual outcome</b>,
+  <header><h1>📋 <span id="title">Results</span></h1><span class="badge">UVS · verifiable</span></header>
+  <p class="tag">One engine, any allocation. The operator published the rules; this list is the <b>actual outcome</b>,
     deterministically derived from a committed seed + a public <b>drand</b> round. Browse it, find your own number, or re-derive it with any verifier below.</p>
+
+  <div class="modelbar">
+    <label for="preset">Model</label>
+    <select id="preset"></select>
+    <span class="mut" id="presetNote"></span>
+  </div>
 
   <div class="card">
     <h2>Find your result</h2>
     <div class="find">
-      <input id="findId" placeholder="your number, e.g. PULL-01234">
+      <input id="findId" placeholder="your number">
       <button id="findBtn">check</button>
     </div>
     <div class="findOut" id="findOut"></div>
   </div>
 
   <div class="card">
-    <h2>By tier — click to list the winners</h2>
+    <h2>By outcome — click to list them</h2>
     <div class="chips" id="chips"></div>
     <div class="list" id="list" style="display:none"></div>
   </div>
@@ -73,7 +82,7 @@
     <div class="kv"><b>drand round</b> <span id="pDrand">—</span></div>
     <div class="kv"><b>combinedSeed</b> = SHA-256(serverSeed : drandRandomness)<br><span id="pComb">—</span></div>
     <div class="mut" style="margin:8px 0">Each entry's rank = <code>SHA-256(combinedSeed : id)</code>, sorted high→low; the published
-      prize pool is dealt onto that order. Same input → same list, on any machine.</div>
+      prize pool is dealt onto that order. It is one seeded permutation — same input → same list, on any machine.</div>
     <div class="kv"><b>re-derive with an independent verifier</b> (no shared code — all reproduce the same list):</div>
     <div class="verifiers">
       <a href="https://github.com/constarik/uvs/blob/master/verifiers/draw-verify.js" target="_blank" rel="noopener">JS</a>
@@ -134,73 +143,98 @@ var SOURCES=[
   function(R){return 'https://api.drand.sh/'+CHAIN+'/public/'+R;}
 ];
 
-/* ── a fixed, completed draw (same algorithm as the reference verifiers) ── */
-var REC={ title:'Banner #1 — published drop rates',
-  serverSeed:'a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8091a2b3c4d5e6f70811223344556',
-  drand:{round:29286636, randomness:'e8d0543d60b639cf02775d16d8bc66f281b7bcbdf59706f29a1684889f8b9548'},
-  M:2000, prefix:'PULL-', pad:5,
-  tiers:[{key:'legendary',label:'Legendary',count:20,color:'#f2c14e'},
-         {key:'epic',label:'Epic',count:180,color:'#b06efe'},
-         {key:'rare',label:'Rare',count:600,color:'#6ea8fe'},
-         {key:'common',label:'Common',count:1200,color:'#8b95a5'}] };
+/* ── presets: one engine, different prize tables ── */
+var PRESETS=[
+  { id:'gacha', name:'Gacha banner', note:'published drop rates · click a tier → who pulled it',
+    title:'Banner #1 — published drop rates',
+    serverSeed:'a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8091a2b3c4d5e6f70811223344556',
+    drand:{round:29286636,randomness:'e8d0543d60b639cf02775d16d8bc66f281b7bcbdf59706f29a1684889f8b9548'},
+    M:2000, prefix:'PULL-', pad:5,
+    tiers:[{key:'legendary',label:'Legendary',count:20,color:'#f2c14e'},{key:'epic',label:'Epic',count:180,color:'#b06efe'},{key:'rare',label:'Rare',count:600,color:'#6ea8fe'},{key:'common',label:'Common',count:1200,color:'#8b95a5'}] },
+  { id:'tickets', name:'Event tickets (lottery)', note:'N seats among M applicants · every loser checks their own rank',
+    title:'Cup Final — seats by lottery',
+    serverSeed:'b7e15162c5f3a4d9e8c0fa1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f6',
+    drand:{round:29286636,randomness:'e8d0543d60b639cf02775d16d8bc66f281b7bcbdf59706f29a1684889f8b9548'},
+    M:2000, prefix:'TICKET-', pad:5,
+    tiers:[{key:'seat',label:'Seat',count:500,color:'#34d17e'},{key:'none',label:'No seat',count:1500,color:'#8b95a5'}] },
+  { id:'spots', name:'Allocation (school places)', note:'placed / waitlist / not placed — civic draw, no casino',
+    title:'School places — admission lottery',
+    serverSeed:'c3f5a7091b2d4e6f80a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f6071',
+    drand:{round:29286636,randomness:'e8d0543d60b639cf02775d16d8bc66f281b7bcbdf59706f29a1684889f8b9548'},
+    M:2000, prefix:'APPLICANT-', pad:5,
+    tiers:[{key:'placed',label:'Placed',count:300,color:'#34d17e'},{key:'waitlist',label:'Waitlist',count:200,color:'#f2c14e'},{key:'none',label:'Not placed',count:1500,color:'#8b95a5'}] }
+];
 var $=function(id){return document.getElementById(id);};
-function idOf(i){return REC.prefix+String(i+1).padStart(REC.pad,'0');}
+function idOf(rec,i){return rec.prefix+String(i+1).padStart(rec.pad,'0');}
+var current=null;
 
-var combined=sha256hex(REC.serverSeed+':'+REC.drand.randomness);
-var ranked=[], byId={};
-(function(){
-  var arr=[]; for(var i=0;i<REC.M;i++){var id=idOf(i); arr.push({id:id,score:sha256hex(combined+':'+id)});}
+function build(rec){
+  var combined=sha256hex(rec.serverSeed+':'+rec.drand.randomness);
+  var arr=[]; for(var i=0;i<rec.M;i++){var id=idOf(rec,i); arr.push({id:id,score:sha256hex(combined+':'+id)});}
   arr.sort(function(a,b){ if(a.score>b.score)return -1; if(a.score<b.score)return 1; return a.id<b.id?-1:a.id>b.id?1:0; });
-  var cum=[],c=0; REC.tiers.forEach(function(t){c+=t.count;cum.push(c);});
-  function tierAtRank(rank){ for(var j=0;j<REC.tiers.length;j++){ if(rank<=cum[j]) return REC.tiers[j]; } return REC.tiers[REC.tiers.length-1]; }
+  var cum=[],c=0; rec.tiers.forEach(function(t){c+=t.count;cum.push(c);});
+  function tierAtRank(rank){ for(var j=0;j<rec.tiers.length;j++){ if(rank<=cum[j]) return rec.tiers[j]; } return rec.tiers[rec.tiers.length-1]; }
+  var ranked=[],byId={};
   for(var i=0;i<arr.length;i++){ var row={rank:i+1,id:arr[i].id,score:arr[i].score,tier:tierAtRank(i+1)}; ranked.push(row); byId[arr[i].id]=row; }
-})();
+  current={rec:rec,combined:combined,ranked:ranked,byId:byId};
 
-$('title').textContent=REC.title;
-$('pSeed').textContent=REC.serverSeed;
-$('pComb').textContent=combined;
-var DURL='https://api.drand.sh/'+CHAIN+'/public/'+REC.drand.round;
-$('pDrand').innerHTML='round <b>'+REC.drand.round+'</b> · randomness <b>'+REC.drand.randomness.slice(0,16)+'…</b> '
-  +'<button class="drand" onclick="verifyDrand()">✓ verify drand</button> <a href="'+DURL+'" target="_blank" rel="noopener" style="font-size:11px">raw ↗</a>'
-  +'<div id="drandVerdict" style="font-size:12px;margin-top:6px"></div>';
+  $('title').textContent=rec.title;
+  $('presetNote').textContent=rec.note;
+  $('pSeed').textContent=rec.serverSeed;
+  $('pComb').textContent=combined;
+  var DURL='https://api.drand.sh/'+CHAIN+'/public/'+rec.drand.round;
+  $('pDrand').innerHTML='round <b>'+rec.drand.round+'</b> · randomness <b>'+rec.drand.randomness.slice(0,16)+'…</b> '
+    +'<button class="drand" onclick="verifyDrand()">✓ verify drand</button> <a href="'+DURL+'" target="_blank" rel="noopener" style="font-size:11px">raw ↗</a>'
+    +'<div id="drandVerdict" style="font-size:12px;margin-top:6px"></div>';
+  $('findId').value=''; $('findId').placeholder='your number, e.g. '+idOf(rec,0); $('findOut').innerHTML='';
 
-(function(){
   var box=$('chips'); box.innerHTML='';
-  REC.tiers.forEach(function(t){
-    var p=100*t.count/REC.M, pct=p<10?p.toFixed(2):p.toFixed(1);
+  rec.tiers.forEach(function(t){
+    var p=100*t.count/rec.M, pct=p<10?p.toFixed(2):p.toFixed(1);
     var el=document.createElement('div'); el.className='chip'; el.setAttribute('data-key',t.key);
     el.innerHTML='<span class="t" style="color:'+t.color+'">'+t.label+'</span><span class="n">'+t.count.toLocaleString()+' · '+pct+'%</span>';
     el.onclick=function(){ showTier(t.key); var cs=document.querySelectorAll('.chip'); for(var i=0;i<cs.length;i++) cs[i].classList.toggle('on', cs[i].getAttribute('data-key')===t.key); };
     box.appendChild(el);
   });
-})();
+  showTier(rec.tiers[0].key);
+  var f=document.querySelector('.chip'); if(f) f.classList.add('on');
+}
+
 function showTier(key){
-  var rows=ranked.filter(function(r){return r.tier.key===key;}), lim=200, html='';
+  var rows=current.ranked.filter(function(r){return r.tier.key===key;}), lim=200, html='';
   for(var i=0;i<Math.min(rows.length,lim);i++){ var r=rows[i];
     html+='<div class="row" onclick="this.classList.toggle(\'open\')"><span class="rk">#'+r.rank+'</span><span class="id">'+r.id+'</span><span class="pz" style="color:'+r.tier.color+'">'+r.tier.label+'</span><span class="sc">score = SHA-256(combined:'+r.id+') = '+r.score+'</span></div>';
   }
   if(rows.length>lim) html+='<div class="more">showing '+lim+' of '+rows.length.toLocaleString()+' — use “Find your result” for a specific number</div>';
   var L=$('list'); L.innerHTML=html; L.style.display='block';
 }
+
 $('findBtn').onclick=function(){
-  var id=($('findId').value||'').trim().toUpperCase();
-  var re=new RegExp('^'+REC.prefix.replace('-','\\-')+'\\d{'+REC.pad+'}$');
-  if(!re.test(id)){ $('findOut').innerHTML='<span style="color:var(--dim)">format: '+REC.prefix+'00001 … '+idOf(REC.M-1)+'</span>'; return; }
-  var r=byId[id];
+  var rec=current.rec, id=($('findId').value||'').trim().toUpperCase();
+  var re=new RegExp('^'+rec.prefix+'\\d{'+rec.pad+'}$');
+  if(!re.test(id)){ $('findOut').innerHTML='<span style="color:var(--dim)">format: '+rec.prefix+'00001 … '+idOf(rec,rec.M-1)+'</span>'; return; }
+  var r=current.byId[id];
   if(!r){ $('findOut').innerHTML='<span style="color:var(--red)">'+id+' is not in this draw’s participant list.</span>'; return; }
-  $('findOut').innerHTML=id+' → <b style="color:'+r.tier.color+'">'+r.tier.label+'</b> · rank '+r.rank.toLocaleString()+' of '+REC.M.toLocaleString()
+  $('findOut').innerHTML=id+' → <b style="color:'+r.tier.color+'">'+r.tier.label+'</b> · rank '+r.rank.toLocaleString()+' of '+rec.M.toLocaleString()
     +'<br><span class="kv" style="margin:4px 0">SHA-256(combined:'+id+') = '+r.score.slice(0,24)+'… → '+r.tier.label+'</span>';
 };
+
 async function verifyDrand(){
-  var out=$('drandVerdict'); out.innerHTML='checking drand…'; var fetched=null;
-  for(var s=0;s<SOURCES.length;s++){ try{ var res=await fetch(SOURCES[s](REC.drand.round));
+  var rec=current.rec, out=$('drandVerdict'); out.innerHTML='checking drand…'; var fetched=null;
+  for(var s=0;s<SOURCES.length;s++){ try{ var res=await fetch(SOURCES[s](rec.drand.round));
     if(res&&res.ok){ var j=await res.json(); if(j&&j.signature){ fetched=j.randomness||randomnessOfSig(j.signature); break; } } }catch(e){} }
   if(!fetched){ out.innerHTML='<span style="color:var(--red)">couldn\'t reach drand — open the raw link</span>'; return; }
-  out.innerHTML=(fetched===REC.drand.randomness)
-    ? '<span style="color:var(--green)">✓ Confirmed: drand round '+REC.drand.round+' publicly has exactly this randomness. This draw used the real public value — it could not be invented or pre-picked.</span>'
-    : '<span style="color:var(--red)">✗ MISMATCH: drand says '+fetched.slice(0,16)+'…, the record claims '+REC.drand.randomness.slice(0,16)+'…</span>';
+  out.innerHTML=(fetched===rec.drand.randomness)
+    ? '<span style="color:var(--green)">✓ Confirmed: drand round '+rec.drand.round+' publicly has exactly this randomness. This draw used the real public value — it could not be invented or pre-picked.</span>'
+    : '<span style="color:var(--red)">✗ MISMATCH: drand says '+fetched.slice(0,16)+'…, the record claims '+rec.drand.randomness.slice(0,16)+'…</span>';
 }
-showTier('legendary'); var first=document.querySelector('.chip'); if(first) first.classList.add('on');
+
+(function(){
+  var sel=$('preset');
+  PRESETS.forEach(function(p,i){ var o=document.createElement('option'); o.value=i; o.textContent=p.name; sel.appendChild(o); });
+  sel.onchange=function(){ build(PRESETS[parseInt(sel.value)||0]); };
+  build(PRESETS[0]);
+})();
 </script>
 </body>
 </html>
