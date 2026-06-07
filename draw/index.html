@@ -3,124 +3,106 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Fair Draw · UVS + drand</title>
+<title>Run a draw · UVS — live & verifiable</title>
 <style>
   :root{ --bg:#0e1116; --panel:#171b22; --line:#262c36; --ink:#e8edf4; --dim:#8b95a5;
-    --gold:#f2c14e; --blue:#6ea8fe; --green:#34d17e; --red:#ff5d6c; }
+    --gold:#f2c14e; --purple:#b06efe; --blue:#6ea8fe; --green:#34d17e; --red:#ff5d6c; }
   *{box-sizing:border-box}
   body{margin:0;background:radial-gradient(1200px 600px at 50% -10%,#1a2230,#0e1116);color:var(--ink);
     font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;min-height:100vh;
     display:flex;flex-direction:column;align-items:center;padding:24px}
-  .wrap{width:100%;max-width:620px}
+  .wrap{width:100%;max-width:680px}
   #errbar{display:none;background:#3a1014;border:1px solid #ff5d6c;color:#ffd7db;padding:10px 12px;border-radius:10px;margin-bottom:12px;font:12px ui-monospace,monospace;word-break:break-all}
-  header{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
-  h1{font-size:20px;margin:0;letter-spacing:.3px}
+  header{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px}
+  h1{font-size:19px;margin:0;letter-spacing:.2px}
   .badge{font-size:11px;color:#bfe3c9;background:rgba(52,209,126,.12);border:1px solid rgba(52,209,126,.4);padding:3px 9px;border-radius:999px;font-weight:600}
   .tag{font-size:12.5px;color:var(--dim);margin:0 0 16px}
-  .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:16px 18px;margin-bottom:14px}
-  .card h2{font-size:12px;text-transform:uppercase;letter-spacing:.7px;color:var(--dim);margin:0 0 12px;font-weight:700}
-  .row{display:flex;gap:12px;align-items:center;margin-bottom:12px;flex-wrap:wrap}
-  .row label{font-size:13px;color:var(--dim);min-width:74px}
-  .seg{display:flex;gap:6px;flex:1}
-  .seg button{flex:1;padding:8px 0;border-radius:9px;border:1px solid var(--line);background:#11151b;color:var(--ink);font-weight:700;cursor:pointer}
-  .seg button.on{border-color:var(--blue);color:var(--blue);background:rgba(110,168,254,.08)}
-  input.num{width:110px;padding:8px 10px;border-radius:9px;border:1px solid var(--line);background:#11151b;color:var(--ink);font-family:ui-monospace,monospace}
-  .go{width:100%;padding:14px;border:0;border-radius:12px;font-size:16px;font-weight:800;letter-spacing:.3px;background:linear-gradient(180deg,#6ea8fe,#4d86e0);color:#08101f;cursor:pointer}
+  .modelbar{display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap}
+  .modelbar label{font-size:12px;color:var(--dim)}
+  .modelbar select{flex:1;min-width:160px;padding:9px 11px;border-radius:9px;border:1px solid var(--line);background:#11151b;color:var(--ink);font:inherit;cursor:pointer}
+  .go{width:100%;padding:14px;border:0;border-radius:12px;font-size:16px;font-weight:800;letter-spacing:.3px;background:linear-gradient(180deg,#6ea8fe,#4d86e0);color:#08101f;cursor:pointer;margin-bottom:6px}
   .go:disabled{opacity:.5;cursor:not-allowed}
-  .status{font-size:13px;color:var(--dim);min-height:20px;margin:12px 0}
-  .status b{color:var(--ink)} .status .wait{color:var(--gold)} .status .ok{color:var(--green)}
-  .stats{display:flex;gap:18px;flex-wrap:wrap;font-size:13px;color:var(--dim);margin-bottom:14px}
-  .stats b{color:var(--ink);font-size:17px;display:block;font-variant-numeric:tabular-nums}
+  .modelnote{font-size:12px;color:#6b7686;margin:0 0 12px}
+  .status{font-size:13px;color:var(--dim);min-height:20px;margin:8px 0}
+  .status b{color:var(--ink)} .status .ok{color:var(--green)}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px 16px;margin-bottom:14px}
+  .card h2{font-size:11px;text-transform:uppercase;letter-spacing:.7px;color:var(--dim);margin:0 0 11px;font-weight:700}
   .you{border-radius:13px;padding:16px;text-align:center;border:1px solid var(--line);background:#0f141b;margin-bottom:14px}
   .you .lbl{font-size:12px;color:var(--dim);text-transform:uppercase;letter-spacing:.6px}
   .you .id{font-family:ui-monospace,monospace;font-size:14px;margin:4px 0 8px}
-  .you .res{font-size:24px;font-weight:800;letter-spacing:.5px}
-  .you .res.win{color:var(--green)} .you .res.lose{color:var(--red)}
+  .you .res{font-size:22px;font-weight:800;letter-spacing:.4px}
   .you .why{font-size:12.5px;color:var(--dim);margin-top:6px}
-  .check{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-  .check input{flex:1;min-width:130px;padding:8px 10px;border-radius:9px;border:1px solid var(--line);background:#11151b;color:var(--ink);font-family:ui-monospace,monospace}
-  .check button{padding:8px 14px;border-radius:9px;border:1px solid var(--line);background:#11151b;color:var(--ink);cursor:pointer;font-weight:600}
-  .checkOut{font-size:13px;margin-top:9px;min-height:18px}
-  details{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px 15px;margin-bottom:12px}
+  .chips{display:flex;gap:8px;flex-wrap:wrap}
+  .chip{padding:8px 12px;border-radius:11px;border:1px solid var(--line);background:#11151b;cursor:pointer;font-size:13px;display:flex;flex-direction:column;gap:1px;min-width:96px}
+  .chip.on{border-color:var(--ink)}
+  .chip .t{font-weight:700} .chip .n{font-size:11px;color:var(--dim);font-variant-numeric:tabular-nums}
+  .list{margin-top:12px;max-height:320px;overflow:auto;border:1px solid var(--line);border-radius:10px;background:#0f141b}
+  .row{display:flex;gap:10px;align-items:center;padding:7px 12px;border-bottom:1px solid #181d26;cursor:pointer;font-size:13px;flex-wrap:wrap}
+  .row:hover{background:#131922}
+  .row .rk{color:var(--dim);width:54px;font-variant-numeric:tabular-nums;font-size:12px}
+  .row .id{font-family:ui-monospace,monospace;flex:1}
+  .row .pz{font-weight:600}
+  .row .sc{display:none;font-family:ui-monospace,monospace;font-size:11px;color:var(--dim);width:100%;padding-top:4px}
+  .row.open .sc{display:block}
+  .more{padding:9px 12px;color:var(--dim);font-size:12px;text-align:center}
+  .kv{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;color:var(--dim);word-break:break-all;margin:8px 0}
+  .kv b{color:var(--ink)} .kv a{color:var(--blue)}
+  details{background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:12px 15px;margin-bottom:12px}
   summary{cursor:pointer;color:var(--blue);font-weight:600;font-size:13px}
-  .kv{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;color:var(--dim);word-break:break-all;margin:9px 0}
-  .kv b{color:var(--ink);font-weight:600} .kv a{color:var(--blue)}
   .mut{color:#6b7686;font-size:12px;line-height:1.5}
-  table.vs{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:6px}
-  table.vs th,table.vs td{border:1px solid var(--line);padding:7px 9px;text-align:left;vertical-align:top}
-  table.vs th{color:var(--dim);font-weight:600}
-  table.vs td.r{color:var(--red)} table.vs td.g{color:var(--green)}
+  .verifiers a{display:inline-block;margin:4px 8px 0 0;padding:5px 10px;border:1px solid var(--line);border-radius:8px;color:var(--blue);text-decoration:none;font-size:12px}
+  button.drand{margin-left:6px;padding:3px 9px;border-radius:7px;border:1px solid var(--line);background:#11151b;color:var(--blue);cursor:pointer;font:inherit;font-size:12px}
 </style>
 </head>
 <body>
 <div class="wrap">
   <div id="errbar"></div>
-  <header>
-    <h1>🎟️ Fair Draw</h1>
-    <span class="badge">UVS + drand 🟢</span>
-  </header>
-  <p class="tag">Cup final / concert: <b>N seats</b> raffled among <b>M applicants</b>. Every loser can prove they
-    weren't quietly dropped, and that no winner was hand-picked — instead of taking the organiser's word that
-    "it was a random draw."</p>
+  <header><h1>🎲 Run a draw</h1><span class="badge">live · verifiable</span></header>
+  <p class="tag">Pick a model and run it. The randomness comes from a <b>drand</b> round that hasn't happened yet —
+    so neither side can pre-pick it. When the round publishes (~seconds) the draw is sealed; the result is then
+    re-derivable by anyone, in any language.</p>
 
-  <div class="card">
-    <h2>Set up the draw</h2>
-    <div class="row"><label>Applicants</label><div class="seg" id="segM"></div></div>
-    <div class="row"><label>Seats</label><input class="num" id="seats" type="number" value="500" min="1"></div>
-    <button class="go" id="go">RUN THE DRAW</button>
+  <div class="modelbar">
+    <label for="preset">Model</label>
+    <select id="preset"></select>
   </div>
-  <div class="status" id="status">The applicant list and a secret seed are committed first; the winner-picking
-    randomness comes from a drand round that hasn't happened yet — so nobody can be steered in.</div>
+  <p class="modelnote" id="modelnote"></p>
+  <button class="go" id="go">RUN THE DRAW</button>
+  <div class="status" id="status">Free entry, deterministic outcome. Click run.</div>
 
-  <div class="card" id="resultCard" style="display:none">
-    <h2>Result</h2>
-    <div class="stats">
-      <div>Applicants<b id="sM">—</b></div>
-      <div>Seats<b id="sN">—</b></div>
-      <div>Cutoff score<b id="sCut" style="font-size:13px;font-family:ui-monospace,monospace">—</b></div>
-    </div>
-    <div class="you">
-      <div class="lbl">Your entry</div>
-      <div class="id" id="youId">—</div>
-      <div class="res" id="youRes">—</div>
-      <div class="why" id="youWhy"></div>
-    </div>
-    <div class="check">
-      <input id="checkId" placeholder="check any applicant, e.g. FAN-01234">
-      <button id="checkBtn">verify</button>
-    </div>
-    <div class="checkOut" id="checkOut"></div>
+  <div class="you" id="youCard" style="display:none">
+    <div class="lbl">Your entry</div>
+    <div class="id" id="youId">—</div>
+    <div class="res" id="youRes">—</div>
+    <div class="why" id="youWhy"></div>
+  </div>
+
+  <div class="card" id="distCard" style="display:none">
+    <h2>By outcome — click to list them</h2>
+    <div class="chips" id="chips"></div>
+    <div class="list" id="list" style="display:none"></div>
   </div>
 
   <details id="proof" style="display:none">
-    <summary>Proof — recompute it yourself</summary>
-    <div class="kv"><b>applicant-list commitment</b> (fixes the exact entrant list up front)<br><span id="listCmt">—</span></div>
-    <div class="kv"><b>server commitment</b> / <b>revealed seed</b><br><span id="srvCmt">—</span><br><span id="srvSeed">—</span></div>
-    <div class="kv"><b>drand round</b> <span id="drandLine">—</span></div>
-    <div class="mut">Winner score: <code>SHA-256( SHA-256(serverSeed : drandRandomness) : applicantId )</code>.
-      Winners = the N highest scores. Re-fetch the drand round from any mirror (link above), recompute every
-      applicant's score, and you reproduce the exact winner set — and see your own rank. Because the list and the
-      seed were committed <i>before</i> the drand round existed, nobody could be added, dropped, or steered after the fact.</div>
-  </details>
-
-  <details id="limits">
-    <summary>What this does and doesn't prove</summary>
-    <table class="vs">
-      <tr><th></th><th>"Trust us, it was random"</th><th>UVS + drand</th></tr>
-      <tr><td>Winner wasn't swapped after the draw</td><td class="r">unverifiable</td><td class="g">recompute → same winners</td></tr>
-      <tr><td>A loser wasn't quietly dropped</td><td class="r">unverifiable</td><td class="g">your rank is public & re-derivable</td></tr>
-      <tr><td>Organiser didn't steer the randomness</td><td class="r">unverifiable</td><td class="g">entropy from a public future drand round</td></tr>
-      <tr><td>No bots/duplicates in the applicant list</td><td class="r">no</td><td class="r">no — that's eligibility/KYC, a separate problem</td></tr>
-    </table>
-    <div class="mut" style="margin-top:8px">Honest boundary: UVS makes the <b>draw</b> honest, not the <b>guest list</b>.
-      It kills "the random was rigged / winners were swapped / I was dropped by hand." It does not police who got onto the list.</div>
+    <summary>The proof — seed, drand round, and how to re-derive</summary>
+    <div class="kv"><b>serverSeed</b> (committed before the round; revealed after)<br><span id="pSeed">—</span></div>
+    <div class="kv"><b>drand round</b> <span id="pDrand">—</span></div>
+    <div class="kv"><b>combinedSeed</b> = SHA-256(serverSeed : drandRandomness)<br><span id="pComb">—</span></div>
+    <div class="mut" style="margin:8px 0">Each entry's rank = <code>SHA-256(combinedSeed : id)</code>, sorted high→low; the
+      published pool is dealt onto that order. One seeded permutation — same input → same list, anywhere.</div>
+    <div class="kv"><b>re-derive with an independent verifier</b> (no shared code — all reproduce the same list):</div>
+    <div class="verifiers">
+      <a href="https://github.com/constarik/uvs/blob/master/verifiers/draw-verify.js" target="_blank" rel="noopener">JS</a>
+      <a href="https://github.com/constarik/uvs/blob/master/verifiers/draw_verify.py" target="_blank" rel="noopener">Python</a>
+      <a href="https://github.com/constarik/uvs/blob/master/verifiers/DrawVerify.java" target="_blank" rel="noopener">Java</a>
+      <a href="https://github.com/constarik/uvs/blob/master/verifiers/draw_verify.cpp" target="_blank" rel="noopener">C++</a>
+      <a href="https://github.com/constarik/uvs/tree/master/verifiers" target="_blank" rel="noopener">+ test-vectors</a>
+    </div>
   </details>
 </div>
 <script>
-window.onerror=function(m,s,l,c,e){var b=document.getElementById('errbar');
-  if(b){b.style.display='block';b.textContent='⚠ '+((e&&e.message)||m)+'  @'+l+':'+c;}return false;};
+window.onerror=function(m,s,l,c,e){var b=document.getElementById('errbar');if(b){b.style.display='block';b.textContent='⚠ '+((e&&e.message)||m)+'  @'+l+':'+c;}return false;};
 
-/* ---- bundled SHA-256 (ASCII/byte string) ---- */
 function sha256hex(ascii){
   function rrot(x,n){return (x>>>n)|(x<<(32-n));}
   var mathPow=Math.pow,maxWord=mathPow(2,32),result='';
@@ -153,116 +135,111 @@ function sha256hex(ascii){
 }
 function hexToBin(h){var s='';for(var i=0;i<h.length;i+=2)s+=String.fromCharCode(parseInt(h.substr(i,2),16));return s;}
 function randomnessOfSig(sig){return sha256hex(hexToBin(sig));}
-var QUICKNET={period:3,genesis:1692803367,chainHash:'52db9ba70e0cc0f6eaf7803dd07447a1f5477735fd3f661792ba94600c84e971'};
-function roundAt(t){return Math.floor((t-QUICKNET.genesis)/QUICKNET.period)+1;}
-function timeOfRound(r){return QUICKNET.genesis+(r-1)*QUICKNET.period;}
-function futureRound(now,ahead){var r=roundAt(now)+Math.max(1,Math.ceil((ahead||9)/QUICKNET.period));return {round:r,time:timeOfRound(r)};}
-function randHex(n){var a=new Uint8Array(n); if(window.crypto&&crypto.getRandomValues)crypto.getRandomValues(a);
-  else for(var i=0;i<n;i++)a[i]=Math.floor(Math.random()*256);
+var CHAIN='52db9ba70e0cc0f6eaf7803dd07447a1f5477735fd3f661792ba94600c84e971';
+var QN={period:3,genesis:1692803367};
+function roundAt(t){return Math.floor((t-QN.genesis)/QN.period)+1;}
+function timeOfRound(r){return QN.genesis+(r-1)*QN.period;}
+function futureRound(now,ahead){return roundAt(now)+Math.max(1,Math.ceil((ahead||9)/QN.period));}
+function randHex(n){var a=new Uint8Array(n); if(window.crypto&&crypto.getRandomValues)crypto.getRandomValues(a); else for(var i=0;i<n;i++)a[i]=Math.floor(Math.random()*256);
   return [].map.call(a,function(b){return b.toString(16).padStart(2,'0');}).join('');}
-
-/* ---- draw logic (same as draw.js, which the node test uses) ---- */
-function combine(serverSeed,rand){return sha256hex(serverSeed+':'+rand);}
-function scoreOf(combined,id){return sha256hex(combined+':'+id);}
-function listCommitment(ids){return sha256hex(ids.join('\n'));}
-
-var $=function(id){return document.getElementById(id);};
-var M=10000;
-function renderSeg(){var s=$('segM'); s.innerHTML='';
-  [1000,10000,50000].forEach(function(v){var b=document.createElement('button'); b.className=(v===M?'on':'');
-    b.textContent=v.toLocaleString(); b.onclick=function(){M=v;renderSeg();}; s.appendChild(b);});}
-function fmtRank(r){return r.toLocaleString();}
-
 var SOURCES=[
-  function(R){return 'https://drand.cloudflare.com/'+QUICKNET.chainHash+'/public/'+R;},
-  function(R){return 'https://api.drand.sh/'+QUICKNET.chainHash+'/public/'+R;},
-  function(R){return 'https://api.drand.sh/v2/beacons/quicknet/rounds/'+R;}
+  function(R){return 'https://drand.cloudflare.com/'+CHAIN+'/public/'+R;},
+  function(R){return 'https://api.drand.sh/'+CHAIN+'/public/'+R;}
 ];
-async function verifyDrand(){
-  var c=window.__dr; if(!c) return;
-  var out=$('drandVerdict'); out.innerHTML='checking drand…';
-  var fetched=null;
-  for(var s=0;s<SOURCES.length;s++){
-    try{ var res=await fetch(SOURCES[s](c.round));
-      if(res&&res.ok){ var j=await res.json(); if(j&&j.signature){ fetched=j.randomness||randomnessOfSig(j.signature); break; } } }catch(e){}
-  }
-  if(!fetched){ out.innerHTML='<span style="color:#ff5d6c">couldn\'t reach drand to confirm — open the raw link and check by hand</span>'; return; }
-  out.innerHTML = (fetched===c.used)
-    ? '<span style="color:#34d17e">✓ Confirmed: drand round '+c.round+' publicly has exactly this randomness. The draw used the real public value — it could not invent it or pre-pick it.</span>'
-    : '<span style="color:#ff5d6c">✗ MISMATCH: drand says '+fetched.slice(0,16)+'…, the draw used '+c.used.slice(0,16)+'… — do not trust this draw.</span>';
-}
-async function pollRound(R){
+async function pollRound(R,statusEl){
   for(var tries=0;tries<25;tries++){
-    for(var s=0;s<SOURCES.length;s++){
-      try{var res=await fetch(SOURCES[s](R));
-        if(res&&res.ok){var j=await res.json(); if(j&&j.signature) return {signature:j.signature,randomness:j.randomness||randomnessOfSig(j.signature)};}}
-      catch(e){}
-    }
+    for(var s=0;s<SOURCES.length;s++){ try{ var res=await fetch(SOURCES[s](R));
+      if(res&&res.ok){ var j=await res.json(); if(j&&j.signature) return {randomness:j.randomness||randomnessOfSig(j.signature)}; } }catch(e){} }
     var due=timeOfRound(R)-Date.now()/1000;
-    $('status').innerHTML='Waiting for <b>drand round '+R+'</b> (due in ~'+Math.max(0,Math.ceil(due))+'s)…';
+    if(statusEl) statusEl.innerHTML='Sealing with <b>drand round '+R+'</b> — not yet published (due ~'+Math.max(0,Math.ceil(due))+'s)…';
     await new Promise(function(r){setTimeout(r,1500);});
   }
   throw new Error('round '+R+' unavailable');
 }
-async function runDraw(){
-  var N=Math.max(1,Math.min(M,parseInt($('seats').value)||1)); $('seats').value=N;
-  $('go').disabled=true; $('resultCard').style.display='none';
-  var ids=new Array(M); for(var i=0;i<M;i++) ids[i]='FAN-'+String(i).padStart(5,'0');
-  var listC=listCommitment(ids);
-  var serverSeed=randHex(32), serverC=sha256hex(serverSeed);
-  $('listCmt').textContent=listC; $('srvCmt').textContent='commit '+serverC; $('srvSeed').textContent='seed — revealed after —';
-  $('proof').style.display='block';
-  var now=Date.now()/1000, fr=futureRound(now,9);
-  $('drandLine').innerHTML='round <b>'+fr.round+'</b> — not yet published, waiting…';
-  $('status').innerHTML='List of '+M.toLocaleString()+' fixed & committed, secret seed committed. Winner randomness bound to <b>drand round '+fr.round+'</b> (doesn\'t exist yet).';
-  var rnd; try{rnd=await pollRound(fr.round);}catch(e){$('status').innerHTML='<span style="color:var(--red)">drand unreachable: '+e.message+'</span>';$('go').disabled=false;return;}
-  var url='https://api.drand.sh/'+QUICKNET.chainHash+'/public/'+fr.round;
-  $('drandLine').innerHTML='round <b>'+fr.round+'</b> · randomness <b>'+rnd.randomness.slice(0,16)+'…</b> '
-    + '<button onclick="verifyDrand()" style="margin-left:6px;padding:3px 9px;border-radius:7px;border:1px solid #262c36;background:#11151b;color:#6ea8fe;cursor:pointer;font:inherit;font-size:12px">✓ verify drand</button> '
-    + '<a href="'+url+'" target="_blank" rel="noopener" style="font-size:11px;color:#8b95a5">raw ↗</a>'
-    + '<div id="drandVerdict" style="font-size:12px;margin-top:6px"></div>';
-  window.__dr={round:fr.round,used:rnd.randomness};
-  $('status').innerHTML='<span class="ok">drand round '+fr.round+' in.</span> Drawing '+N.toLocaleString()+' of '+M.toLocaleString()+'…';
-  await new Promise(function(r){setTimeout(r,30);});
-  var combined=combine(serverSeed,rnd.randomness);
-  var ranked=new Array(M);
-  for(var i=0;i<M;i++){ranked[i]={id:ids[i],score:scoreOf(combined,ids[i])};}
-  ranked.sort(function(a,b){return a.score<b.score?1:a.score>b.score?-1:0;});
-  var rankById={}; for(var i=0;i<M;i++) rankById[ranked[i].id]=i+1;
-  var cutoff=ranked[N-1].score;
-  $('srvSeed').textContent='seed '+serverSeed;
-  $('sM').textContent=M.toLocaleString(); $('sN').textContent=N.toLocaleString(); $('sCut').textContent=cutoff.slice(0,16)+'…';
-  window.__draw={ids:ids,combined:combined,rankById:rankById,N:N,M:M,cutoff:cutoff};
-  var you='FAN-'+String(Math.floor(Math.random()*M)).padStart(5,'0');
-  showApplicant(you,true);
-  $('resultCard').style.display='block';
-  $('status').innerHTML='<span class="ok">Done.</span> '+N.toLocaleString()+' winners drawn from '+M.toLocaleString()+'. Every result is re-derivable.';
+
+/* ── presets: one live engine, different prize pools ── */
+var PRESETS=[
+  { name:'Gacha banner', note:'published drop rates — 2,000 pulls; exactly 1% land Legendary, and you can see which.', prefix:'PULL-', pad:5, M:2000,
+    tiers:[{key:'legendary',label:'Legendary',count:20,color:'#f2c14e'},{key:'epic',label:'Epic',count:180,color:'#b06efe'},{key:'rare',label:'Rare',count:600,color:'#6ea8fe'},{key:'common',label:'Common',count:1200,color:'#8b95a5'}] },
+  { name:'Event tickets (lottery)', note:'500 seats among 2,000 applicants — every loser can re-derive their own rank.', prefix:'TICKET-', pad:5, M:2000,
+    tiers:[{key:'seat',label:'Seat',count:500,color:'#34d17e'},{key:'none',label:'No seat',count:1500,color:'#8b95a5'}] },
+  { name:'School places (allocation)', note:'300 places + 200 waitlist among 2,000 applicants — a civic draw, no casino.', prefix:'APPLICANT-', pad:5, M:2000,
+    tiers:[{key:'placed',label:'Placed',count:300,color:'#34d17e'},{key:'waitlist',label:'Waitlist',count:200,color:'#f2c14e'},{key:'none',label:'Not placed',count:1500,color:'#8b95a5'}] }
+];
+var $=function(id){return document.getElementById(id);};
+var current=null;
+
+async function run(){
+  var rec=PRESETS[parseInt($('preset').value)||0];
+  $('go').disabled=true; $('youCard').style.display='none'; $('distCard').style.display='none'; $('proof').style.display='none';
+  var serverSeed=randHex(32);
+  $('status').innerHTML='Committed a secret seed <b>'+sha256hex(serverSeed).slice(0,16)+'…</b> · picking a future drand round…';
+  var fr=futureRound(Date.now()/1000,9), rnd;
+  try{ rnd=await pollRound(fr,$('status')); }
+  catch(e){ $('status').innerHTML='<span style="color:var(--red)">drand unreachable: '+e.message+' (need internet)</span>'; $('go').disabled=false; return; }
+  $('status').innerHTML='<span class="ok">drand round '+fr+' published.</span> Computing '+rec.M.toLocaleString()+' entries…';
+  await new Promise(function(r){setTimeout(r,20);});
+  var combined=sha256hex(serverSeed+':'+rnd.randomness);
+  var arr=[]; for(var i=0;i<rec.M;i++){var id=rec.prefix+String(i+1).padStart(rec.pad,'0'); arr.push({id:id,score:sha256hex(combined+':'+id)});}
+  arr.sort(function(a,b){ if(a.score>b.score)return -1; if(a.score<b.score)return 1; return a.id<b.id?-1:a.id>b.id?1:0; });
+  var cum=[],c=0; rec.tiers.forEach(function(t){c+=t.count;cum.push(c);});
+  function tierAtRank(rank){ for(var j=0;j<rec.tiers.length;j++){ if(rank<=cum[j]) return rec.tiers[j]; } return rec.tiers[rec.tiers.length-1]; }
+  var ranked=[],byId={};
+  for(var i=0;i<arr.length;i++){ var row={rank:i+1,id:arr[i].id,score:arr[i].score,tier:tierAtRank(i+1)}; ranked.push(row); byId[arr[i].id]=row; }
+  current={rec:rec,combined:combined,ranked:ranked,byId:byId,serverSeed:serverSeed,drand:{round:fr,randomness:rnd.randomness}};
+
+  var youId=rec.prefix+String(1+Math.floor(Math.random()*rec.M)).padStart(rec.pad,'0'), you=byId[youId];
+  $('youId').textContent='You are '+youId;
+  $('youRes').textContent=you.tier.label; $('youRes').style.color=you.tier.color;
+  $('youWhy').textContent='rank '+you.rank.toLocaleString()+' of '+rec.M.toLocaleString()+' — re-derive it yourself in “Find” terms below, or with any verifier.';
+
+  var box=$('chips'); box.innerHTML='';
+  rec.tiers.forEach(function(t){
+    var p=100*t.count/rec.M, pct=p<10?p.toFixed(2):p.toFixed(1);
+    var el=document.createElement('div'); el.className='chip'; el.setAttribute('data-key',t.key);
+    el.innerHTML='<span class="t" style="color:'+t.color+'">'+t.label+'</span><span class="n">'+t.count.toLocaleString()+' · '+pct+'%</span>';
+    el.onclick=function(){ showTier(t.key); var cs=document.querySelectorAll('.chip'); for(var i=0;i<cs.length;i++) cs[i].classList.toggle('on', cs[i].getAttribute('data-key')===t.key); };
+    box.appendChild(el);
+  });
+  showTier(rec.tiers[0].key); var f=document.querySelector('.chip'); if(f) f.classList.add('on');
+
+  $('pSeed').textContent=serverSeed; $('pComb').textContent=combined;
+  var DURL='https://api.drand.sh/'+CHAIN+'/public/'+fr;
+  $('pDrand').innerHTML='round <b>'+fr+'</b> · randomness <b>'+rnd.randomness.slice(0,16)+'…</b> '
+    +'<button class="drand" onclick="verifyDrand()">✓ verify drand</button> <a href="'+DURL+'" target="_blank" rel="noopener" style="font-size:11px">raw ↗</a>'
+    +'<div id="drandVerdict" style="font-size:12px;margin-top:6px"></div>';
+
+  $('youCard').style.display='block'; $('distCard').style.display='block'; $('proof').style.display='block';
+  $('status').innerHTML='<span class="ok">Done.</span> '+rec.M.toLocaleString()+' entries, sealed by drand round '+fr+' — re-derivable by anyone.';
   $('go').disabled=false;
 }
-function showApplicant(id,isYou){
-  var d=window.__draw; if(!d) return {found:false};
-  var rank=d.rankById[id];
-  if(!rank) return {found:false};
-  var won=rank<=d.N;
-  if(isYou){
-    $('youId').textContent=id;
-    $('youRes').className='res '+(won?'win':'lose');
-    $('youRes').textContent=won?'WON A SEAT':'NO SEAT';
-    $('youWhy').textContent=won
-      ? 'Ranked '+fmtRank(rank)+' of '+d.M.toLocaleString()+' — inside the top '+d.N.toLocaleString()+'.'
-      : 'Ranked '+fmtRank(rank)+' of '+d.M.toLocaleString()+' — below the cutoff of '+d.N.toLocaleString()+' seats, by '+(rank-d.N).toLocaleString()+'.';
+
+function showTier(key){
+  var rows=current.ranked.filter(function(r){return r.tier.key===key;}), lim=200, html='';
+  for(var i=0;i<Math.min(rows.length,lim);i++){ var r=rows[i];
+    html+='<div class="row" onclick="this.classList.toggle(\'open\')"><span class="rk">#'+r.rank+'</span><span class="id">'+r.id+'</span><span class="pz" style="color:'+r.tier.color+'">'+r.tier.label+'</span><span class="sc">score = SHA-256(combined:'+r.id+') = '+r.score+'</span></div>';
   }
-  return {found:true,rank:rank,won:won};
+  if(rows.length>lim) html+='<div class="more">showing '+lim+' of '+rows.length.toLocaleString()+'</div>';
+  var L=$('list'); L.innerHTML=html; L.style.display='block';
 }
-$('checkBtn').onclick=function(){
-  var d=window.__draw; if(!d){$('checkOut').textContent='run a draw first';return;}
-  var id=($('checkId').value||'').trim().toUpperCase();
-  if(!/^FAN-\d{5}$/.test(id)){ $('checkOut').innerHTML='<span style="color:var(--dim)">format: FAN-01234 (00000–'+String(d.M-1).padStart(5,'0')+')</span>'; return; }
-  var r=showApplicant(id,false);
-  if(!r.found){ $('checkOut').innerHTML='<span style="color:var(--red)">'+id+' is not in the committed applicant list.</span>'; return; }
-  $('checkOut').innerHTML=id+' → '+(r.won?'<b style="color:var(--green)">WON</b>':'<b style="color:var(--red)">no seat</b>')+' · rank '+fmtRank(r.rank)+' of '+d.M.toLocaleString();
-};
-renderSeg(); $('go').onclick=runDraw;
+
+async function verifyDrand(){
+  var d=current.drand, out=$('drandVerdict'); out.innerHTML='checking drand…'; var fetched=null;
+  for(var s=0;s<SOURCES.length;s++){ try{ var res=await fetch(SOURCES[s](d.round));
+    if(res&&res.ok){ var j=await res.json(); if(j&&j.signature){ fetched=j.randomness||randomnessOfSig(j.signature); break; } } }catch(e){} }
+  if(!fetched){ out.innerHTML='<span style="color:var(--red)">couldn\'t reach drand — open the raw link</span>'; return; }
+  out.innerHTML=(fetched===d.randomness)
+    ? '<span style="color:var(--green)">✓ Confirmed: drand round '+d.round+' publicly has exactly this randomness. This draw used the real public value — it could not be invented or pre-picked.</span>'
+    : '<span style="color:var(--red)">✗ MISMATCH: drand says '+fetched.slice(0,16)+'…, this draw used '+d.randomness.slice(0,16)+'…</span>';
+}
+
+(function(){
+  var sel=$('preset');
+  PRESETS.forEach(function(p,i){ var o=document.createElement('option'); o.value=i; o.textContent=p.name; sel.appendChild(o); });
+  function note(){ $('modelnote').textContent=PRESETS[parseInt(sel.value)||0].note; }
+  sel.onchange=note; note();
+  $('go').onclick=run;
+})();
 </script>
 </body>
 </html>
