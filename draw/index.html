@@ -52,6 +52,7 @@
   .mut{color:#6b7686;font-size:12px;line-height:1.5}
   .verifiers a{display:inline-block;margin:4px 8px 0 0;padding:5px 10px;border:1px solid var(--line);border-radius:8px;color:var(--blue);text-decoration:none;font-size:12px}
   button.drand{margin-left:6px;padding:3px 9px;border-radius:7px;border:1px solid var(--line);background:#11151b;color:var(--blue);cursor:pointer;font:inherit;font-size:12px}
+  .dl{padding:9px 14px;border-radius:9px;border:1px solid var(--line);background:#11151b;color:var(--blue);cursor:pointer;font:inherit;font-weight:600;font-size:13px}
 </style>
 </head>
 <body>
@@ -78,6 +79,7 @@
   </div>
 
   <div id="shareLine" style="text-align:center;font-size:12.5px;margin:-2px 0 14px"></div>
+  <div id="dlbar" style="text-align:center;margin:-6px 0 14px;display:none"><button class="dl" id="dlBtn">⬇ Download record + result (JSON)</button></div>
 
   <div class="card" id="distCard" style="display:none">
     <h2>By outcome — click to list them</h2>
@@ -213,7 +215,7 @@ async function run(){
 
   var shareUrl='/results/?p='+pIdx+'&seed='+serverSeed+'&round='+fr+'&rand='+rnd.randomness;
   $('shareLine').innerHTML='<a href="'+shareUrl+'" target="_blank" rel="noopener" style="color:var(--blue)">🔗 Share this result (permalink) ↗</a> — opens the exact same finished draw for anyone to re-open &amp; verify.';
-  $('youCard').style.display='block'; $('distCard').style.display='block'; $('proof').style.display='block';
+  $('youCard').style.display='block'; $('distCard').style.display='block'; $('proof').style.display='block'; $('dlbar').style.display='block';
   $('status').innerHTML='<span class="ok">Done.</span> '+rec.M.toLocaleString()+' entries, sealed by drand round '+fr+' — re-derivable by anyone.';
   $('go').disabled=false;
 }
@@ -237,12 +239,33 @@ async function verifyDrand(){
     : '<span style="color:var(--red)">✗ MISMATCH: drand says '+fetched.slice(0,16)+'…, this draw used '+d.randomness.slice(0,16)+'…</span>';
 }
 
+function downloadRecord(){
+  if(!current) return;
+  var c=current, seed=c.serverSeed||c.rec.serverSeed, drand=c.drand||c.rec.drand;
+  var rec={
+    uvs:'verifiable-allocation/v1',
+    model:c.rec.name||c.rec.title||'draw',
+    rules:{
+      participants:c.rec.M, idPrefix:c.rec.prefix,
+      prizePool:c.rec.tiers.map(function(t){return {tier:t.label,key:t.key,count:t.count,pct:+(100*t.count/c.rec.M).toFixed(3)};}),
+      serverSeed:seed,
+      drand:{beacon:'quicknet',round:drand.round,randomness:drand.randomness,verifyUrl:'https://api.drand.sh/'+CHAIN+'/public/'+drand.round},
+      combinedSeed:c.combined,
+      algorithm:'combinedSeed = SHA-256(serverSeed:drandRandomness); score(id) = SHA-256(combinedSeed:id); sort by score DESC (ties: id ASC); deal the prize pool onto that order.'
+    },
+    result:c.ranked.map(function(r){return {rank:r.rank,id:r.id,prize:r.tier.label,score:r.score};})
+  };
+  var blob=new Blob([JSON.stringify(rec,null,2)],{type:'application/json'});
+  var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='uvs-draw-'+drand.round+'.json'; a.click();
+  setTimeout(function(){URL.revokeObjectURL(a.href);},2000);
+}
 (function(){
   var sel=$('preset');
   PRESETS.forEach(function(p,i){ var o=document.createElement('option'); o.value=i; o.textContent=p.name; sel.appendChild(o); });
   function note(){ $('modelnote').textContent=PRESETS[parseInt(sel.value)||0].note; }
   sel.onchange=note; note();
   $('go').onclick=run;
+  $('dlBtn').onclick=downloadRecord;
 })();
 </script>
 </body>

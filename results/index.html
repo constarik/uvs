@@ -46,6 +46,7 @@
   .mut{color:#6b7686;font-size:12px;line-height:1.5}
   .verifiers a{display:inline-block;margin:4px 8px 0 0;padding:5px 10px;border:1px solid var(--line);border-radius:8px;color:var(--blue);text-decoration:none;font-size:12px}
   button.drand{margin-left:6px;padding:3px 9px;border-radius:7px;border:1px solid var(--line);background:#11151b;color:var(--blue);cursor:pointer;font:inherit;font-size:12px}
+  .dl{padding:8px 13px;border-radius:9px;border:1px solid var(--line);background:#11151b;color:var(--blue);cursor:pointer;font:inherit;font-weight:600;font-size:12.5px}
 </style>
 </head>
 <body>
@@ -59,6 +60,7 @@
     <label for="preset">Model</label>
     <select id="preset"></select>
     <span class="mut" id="presetNote"></span>
+    <button class="dl" id="dlBtn" style="margin-left:auto">⬇ Download record + result</button>
   </div>
 
   <div class="card">
@@ -229,9 +231,30 @@ async function verifyDrand(){
     : '<span style="color:var(--red)">✗ MISMATCH: drand says '+fetched.slice(0,16)+'…, the record claims '+rec.drand.randomness.slice(0,16)+'…</span>';
 }
 
+function downloadRecord(){
+  if(!current) return;
+  var c=current, seed=c.serverSeed||c.rec.serverSeed, drand=c.drand||c.rec.drand;
+  var rec={
+    uvs:'verifiable-allocation/v1',
+    model:c.rec.name||c.rec.title||'draw',
+    rules:{
+      participants:c.rec.M, idPrefix:c.rec.prefix,
+      prizePool:c.rec.tiers.map(function(t){return {tier:t.label,key:t.key,count:t.count,pct:+(100*t.count/c.rec.M).toFixed(3)};}),
+      serverSeed:seed,
+      drand:{beacon:'quicknet',round:drand.round,randomness:drand.randomness,verifyUrl:'https://api.drand.sh/'+CHAIN+'/public/'+drand.round},
+      combinedSeed:c.combined,
+      algorithm:'combinedSeed = SHA-256(serverSeed:drandRandomness); score(id) = SHA-256(combinedSeed:id); sort by score DESC (ties: id ASC); deal the prize pool onto that order.'
+    },
+    result:c.ranked.map(function(r){return {rank:r.rank,id:r.id,prize:r.tier.label,score:r.score};})
+  };
+  var blob=new Blob([JSON.stringify(rec,null,2)],{type:'application/json'});
+  var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='uvs-draw-'+drand.round+'.json'; a.click();
+  setTimeout(function(){URL.revokeObjectURL(a.href);},2000);
+}
 (function(){
   var sel=$('preset');
   PRESETS.forEach(function(p,i){ var o=document.createElement('option'); o.value=i; o.textContent=p.name; sel.appendChild(o); });
+  $('dlBtn').onclick=downloadRecord;
   sel.onchange=function(){ build(PRESETS[parseInt(sel.value)||0]); };
   var q=new URLSearchParams(window.location.search), p=parseInt(q.get('p')), seed=q.get('seed'), round=q.get('round'), rand=q.get('rand');
   if(!isNaN(p) && PRESETS[p] && /^[0-9a-fA-F]{8,}$/.test(seed||'') && /^\d+$/.test(round||'') && /^[0-9a-fA-F]{8,}$/.test(rand||'')){
