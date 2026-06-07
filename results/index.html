@@ -233,7 +233,13 @@ async function verifyDrand(){
   var sel=$('preset');
   PRESETS.forEach(function(p,i){ var o=document.createElement('option'); o.value=i; o.textContent=p.name; sel.appendChild(o); });
   sel.onchange=function(){ build(PRESETS[parseInt(sel.value)||0]); };
-  build(PRESETS[0]);
+  var q=new URLSearchParams(window.location.search), p=parseInt(q.get('p')), seed=q.get('seed'), round=q.get('round'), rand=q.get('rand');
+  if(!isNaN(p) && PRESETS[p] && /^[0-9a-fA-F]{8,}$/.test(seed||'') && /^\d+$/.test(round||'') && /^[0-9a-fA-F]{8,}$/.test(rand||'')){
+    sel.value=p;
+    build(Object.assign({}, PRESETS[p], { serverSeed:seed, drand:{round:parseInt(round),randomness:rand}, title:PRESETS[p].title+' — shared result' }));
+  } else {
+    build(PRESETS[0]);
+  }
 })();
 </script>
 </body>

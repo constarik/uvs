@@ -77,6 +77,8 @@
     <div class="why" id="youWhy"></div>
   </div>
 
+  <div id="shareLine" style="text-align:center;font-size:12.5px;margin:-2px 0 14px"></div>
+
   <div class="card" id="distCard" style="display:none">
     <h2>By outcome — click to list them</h2>
     <div class="chips" id="chips"></div>
@@ -170,7 +172,7 @@ var $=function(id){return document.getElementById(id);};
 var current=null;
 
 async function run(){
-  var rec=PRESETS[parseInt($('preset').value)||0];
+  var pIdx=parseInt($('preset').value)||0, rec=PRESETS[pIdx];
   $('go').disabled=true; $('youCard').style.display='none'; $('distCard').style.display='none'; $('proof').style.display='none';
   var serverSeed=randHex(32);
   $('status').innerHTML='Committed a secret seed <b>'+sha256hex(serverSeed).slice(0,16)+'…</b> · picking a future drand round…';
@@ -209,6 +211,8 @@ async function run(){
     +'<button class="drand" onclick="verifyDrand()">✓ verify drand</button> <a href="'+DURL+'" target="_blank" rel="noopener" style="font-size:11px">raw ↗</a>'
     +'<div id="drandVerdict" style="font-size:12px;margin-top:6px"></div>';
 
+  var shareUrl='/results/?p='+pIdx+'&seed='+serverSeed+'&round='+fr+'&rand='+rnd.randomness;
+  $('shareLine').innerHTML='<a href="'+shareUrl+'" target="_blank" rel="noopener" style="color:var(--blue)">🔗 Share this result (permalink) ↗</a> — opens the exact same finished draw for anyone to re-open &amp; verify.';
   $('youCard').style.display='block'; $('distCard').style.display='block'; $('proof').style.display='block';
   $('status').innerHTML='<span class="ok">Done.</span> '+rec.M.toLocaleString()+' entries, sealed by drand round '+fr+' — re-derivable by anyone.';
   $('go').disabled=false;
