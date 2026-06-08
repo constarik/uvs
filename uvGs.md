@@ -10,7 +10,7 @@ Reference: [paddla.uncloned.work](https://paddla.uncloned.work) · [registrar.un
 
 > **Normative language.** **MUST**, **MUST NOT**, **SHOULD**, **MAY** per RFC 2119.
 
-> **Scope.** uvGame is the UVS branch for **interactive games with a player** — slots, crash games, instant lotteries, physics arcades, and real-time multiplayer. It inherits everything in UVS-core (`uvs.md`) and adds the game-specific machinery: game modes, the player seed contribution, the ChaCha20 keystream, the Move protocol, and the optional Protected layer.
+> **Scope.** uvGame is the UVS branch for **interactive games with a player** — slots, crash games, instant-win games, physics arcades, and real-time multiplayer. It inherits everything in UVS-core (`uvs.md`) and adds the game-specific machinery: game modes, the player seed contribution, the ChaCha20 keystream, the Move protocol, and the optional Protected layer.
 >
 > A draw with no player belongs to **uvLottery** (`uvLs.md`), not here.
 
@@ -54,7 +54,7 @@ No player input during play. The outcome is fully determined by the seed:
 compute(seed) → result
 ```
 
-Verification: any party recomputes `compute(seed)` and compares. Examples: slot, crash game, instant lottery, dice.
+Verification: any party recomputes `compute(seed)` and compares. Examples: slot, crash game, instant-win game, dice. (A *draw* with no player — even an "instant lottery" — belongs to uvLottery, not here.)
 
 ### 2.2 Move Mode
 

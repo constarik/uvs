@@ -165,6 +165,8 @@ A uvLottery draw **SHOULD** publish a self-contained record sufficient for any t
 
 The header (`commitment`, `drand` round, `branch: "uvLottery"`) follows core §6.2; the record is the replayable recipe (core §6.1).
 
+> **Two version axes — don't conflate them.** The `verifiable-allocation/v1` tag versions the **record schema** (the JSON shape) and evolves independently of the standard: a `/v1` record is the current shape produced under uvLottery Standard **v3**. The standard version travels in the header as `uvsVersion: 3` (core §6.2), not in this field.
+
 ---
 
 ## 8. Trust Tiers for Draws
