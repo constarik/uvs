@@ -1,77 +1,66 @@
 # UVS — Uncloned Verification Standard
 
-Open protocol for verifiable games. Mathematically provable fairness without regulators.
+**Provably fair by mathematics, not by trust.** A result should be a fact you can recompute, not a promise you have to trust.
 
-📄 **[Read the full specification → SPEC.md](./SPEC.md)**
-
----
-
-**Version:** 2.0  
-**Status:** Active development  
-**Published:** April 2026  
-**Author:** [Uncloned Math](https://uncloned.work)  
-**Previous version:** [SPEC-v1.md](./SPEC-v1.md)
+**Version 3 · June 2026** · [uncloned.work](https://uncloned.work)
 
 ---
 
-## What is UVS?
-
-UVS defines how randomness is generated, how state is recorded, how simulation is reproduced, how player actions (Moves) are verified, and how fairness is proven — without trusting the operator.
-
-**New in v2:** Move as first-class concept, configurable verification granularity (batch to per-tick), bidirectional replay, WASM per-session layer, Registrar as protocol role. One Move = one game.
-
-It is not a library, not a framework, and not an engine. It is a protocol.
-
-## Key properties
-
-- **Deterministic** — same seed + params always produces the same result
-- **Verifiable** — any player or auditor can reproduce any session independently
-- **Unbounded** — no upper limit on simulation length; determinism preserved across billions of steps
-- **Parametric** — caller-defined parameters are part of the verifiable input
-- **Self-contained** — no external regulators required for fairness guarantees
-
-## Cryptographic primitives
-
-| Primitive | Usage |
-|---|---|
-| SHA-256 | serverSeedHash, stateHash, sessionId |
-| SHA-512 | combinedSeed derivation |
-| ChaCha20 | PRNG (RFC 8439) |
-| Canonical JSON | deterministic state serialization |
-
-## Quick start
-
-```js
-// combinedSeed derivation
-combinedSeed = SHA-512(serverSeed + ":" + clientSeed + ":" + nonce)
-
-// ChaCha20 key and nonce
-key    = combinedSeed[0..31]   // 32 bytes
-nonce  = combinedSeed[32..43]  // 12 bytes
-
-// Each step
-const rng    = new UVS_PRNG(combinedSeed)
-const output = simulate(state, input, rng, params)
-auditTrail.push({ step, params, input, output, stateHash, rngCalls: rng.consumed() })
-```
-
-Full example with session header, hash mismatch handling, and `canonicalJSON()` → [SPEC.md § 10](./SPEC.md#10-minimal-example)
-
-## Test vectors
-
-Verify your implementation against [section 11](./SPEC.md#11-test-vectors):
+UVS is one core primitive — a deterministic, committed, publicly reproducible draw — with two branches. v3 splits the standard into three documents:
 
 ```
-serverSeed    : deadbeefcafebabe0102030405060708090a0b0c0d0e0f101112131415161718
-clientSeed    : player_seed_42
-nonce         : 1
-
-serverSeedHash: 0dc3c92d4a8b8c6cab67eee53e8177f679e5efa47cce6eb741255466f8dfcf3e
-sessionId     : b2332394bde343fb52bd8ff036c4558a29b480733c0d8973f2c78bfa8966fc35
-rngCalls[0]   : 618181213 (0x24d8b25d)
-stateHash     : 5e1fc7e7a541ecb9c8ed55c21950f40d5b7d06f79d8b9e4dcede9636520c3ce6
+                 UVS-core  ·  uvs.md
+             the invariant both branches share
+        ┌──────────────────┴──────────────────┐
+   uvLottery · uvLs.md              uvGame · uvGs.md
+   verifiable draws                 interactive games
 ```
+
+### → [**uvLottery Standard** — `uvLs.md`](./uvLs.md) · *the open standard for verifiable draws*
+Lotteries, raffles, gacha / loot-box pulls, and allocations (housing, visas, school places, DAO distributions). One seeded permutation anyone can recompute from public data, sealed by a public **drand** round so it can't be pre-picked. **Shipped** — live at [uvs.uncloned.work/draw](https://uvs.uncloned.work/draw), reproduced byte-for-byte by reference verifiers in [JavaScript, Python, Java, and C++](./verifiers).
+
+### → [**uvGame Standard** — `uvGs.md`](./uvGs.md) · *interactive games with a player*
+Slots, crash games, physics arcades, multiplayer. ChaCha20 keystream, commit-reveal with a player `clientSeed`, optional Protected layer (per-session WASM + Registrar). Reference: [PADDLA](https://paddla.uncloned.work). Move Sync (real-time multiplayer, signed moves) is a planned profile.
+
+### → [**UVS-core** — `uvs.md`](./uvs.md) · *the invariant*
+Determinism, canonical JSON, the Audit-Trail recipe format, reproducibility, version negotiation, and the derived **trust tiers** (🔴 unanchored / 🟡 notary / 🟢 outcome-bound).
+
+**Full index:** [SPEC.md](./SPEC.md) · **Archives:** [SPEC-v2.md](./SPEC-v2.md) (frozen v2 monolith), [SPEC-v1.md](./SPEC-v1.md).
+
+---
+
+## Verify a draw yourself
+
+A draw is one operation:
+
+```
+combinedSeed = SHA-256( serverSeed + ":" + drandRandomness )
+score(id)    = SHA-256( combinedSeed + ":" + id )
+order        = participants sorted by score DESC      (ties: id ASC)
+allocation   = order[i] receives prizes[i]            (null beyond the pool)
+```
+
+Four independent reference verifiers reproduce [`verifiers/test-vectors.json`](./verifiers) byte-for-byte — pick the language you trust:
+
+```
+node   verifiers/draw-verify.js verifiers/record.json
+python verifiers/draw_verify.py verifiers/record.json
+javac  verifiers/DrawVerify.java && java -cp verifiers DrawVerify
+```
+
+There is no "operator's version" of the result. There is one result, and anyone can compute it.
+
+## Reference implementations
+
+| What | Branch | Link |
+|---|---|---|
+| Run a draw (live) | uvLottery | [uvs.uncloned.work/draw](https://uvs.uncloned.work/draw) |
+| PADDLA — physics arcade | uvGame | [paddla.uncloned.work](https://paddla.uncloned.work) |
+| Registrar — WASM seed + verify node | uvGame (Protected) | [registrar.uncloned.work](https://registrar.uncloned.work) |
+| SDK — core + uvGame + uvLottery plugins | both | [github.com/constarik/uvs-sdk](https://github.com/constarik/uvs-sdk) |
 
 ## License
 
 The UVS specification is published under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Implementations may use any license.
+
+*Constantin Razinsky · constr@gmail.com · Telegram: [@constrik](https://t.me/constrik)*
