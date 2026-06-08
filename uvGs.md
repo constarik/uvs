@@ -54,7 +54,7 @@ No player input during play. The outcome is fully determined by the seed:
 compute(seed) → result
 ```
 
-Verification: any party recomputes `compute(seed)` and compares. Examples: slot, crash game, instant-win game, dice. (A *draw* with no player — even an "instant lottery" — belongs to uvLottery, not here.)
+Verification: any party recomputes `compute(seed)` and compares. Examples: slot, crash game, instant-win game, dice.
 
 ### 2.2 Move Mode
 
