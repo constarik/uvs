@@ -1,3 +1,8 @@
+﻿# (Superseded framing note)
+
+> **This file was `DESIGN_NOTES_v3.md`.** Its original premise — *"v3 = Move Sync"* — is **superseded** by the v3 three-document split. In v3, **Move Sync is a PLANNED profile of uvGame** (see `uvGs.md` §7), not a global version, and **Draw/Permutation shipped as uvLottery** (`uvLs.md`). The signing / ack / public-trail / SDK material below remains the working normative draft for the uvGame **Move Sync** profile and is promoted into `uvGs.md` §7 on ship (gated on NOISORE). Sections here that patch the old monolith (SHA-512 retention, One-Move-One-Game scoping, clientSeed-in-Protected) are already folded into `uvs.md` / `uvGs.md`.
+
+---
 # UVS v3 — Design Notes
 
 **Status:** Draft · Target release: before July 2026 · Blocked on: `uvs-sdk` publication and NOISORE Move Sync reference implementation
@@ -388,3 +393,4 @@ Without SDK: 2–4 weeks including protocol study, cryptographic implementation,
 The SDK is therefore treated as a first-class deliverable of v3, not an optional companion. v3 release is blocked not only on NOISORE but on SDK publication.
 
 ---
+
