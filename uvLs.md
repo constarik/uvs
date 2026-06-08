@@ -31,6 +31,7 @@ Run a live draw: [uvs.uncloned.work/draw](https://uvs.uncloned.work/draw) · Ref
 9. [Verification](#9-verification)
 10. [Test Vector](#10-test-vector)
 11. [Branch Threat Model](#11-branch-threat-model)
+12. [Verification & Falsifiability](#12-verification--falsifiability)
 
 ---
 
@@ -229,6 +230,25 @@ Beyond the shared core threats (`uvs.md` §12), uvLottery specifically prevents 
 - **Notary-only weakness** — a draw bound only as a notary (§5.3) is grindable and **MUST NOT** be presented as 🟢.
 - **Off-chain identity / eligibility** — who is allowed to hold a ticket (KYC, one-per-person) is the operator's domain, not UVS's.
 - **Cryptographic breaks** — inherits the security of SHA-256 and drand.
+
+---
+
+## 12. Verification & Falsifiability
+
+UVS makes a small set of **specific, falsifiable claims**. Each is stated below with **exactly what would disprove it** and the **public inputs** needed to try. There is no bounty and no challenge framing — this is the ordinary posture of a cryptographic claim: confidence expressed as a standing invitation to refute. Every input required to attempt a refutation is public, and none of it requires permission from, or contact with, the operator.
+
+| # | Claim | What would falsify it | Public inputs to check it |
+|---|-------|-----------------------|---------------------------|
+| 1 | **One result.** The published inputs yield exactly one winner order. | Produce two different valid winner lists from the same `serverSeed`, `drandRandomness`, `participants`, and pool. | the record + any reference verifier |
+| 2 | **Faithful ranking.** Every entry's rank is the published function of its id. | Find a participant whose recomputed `rank` ≠ the announced rank. | `participants[]` + `combinedSeed` |
+| 3 | **Commitment integrity.** The revealed seed is the one committed before the draw. | Show `SHA-256(serverSeed)` ≠ the pre-published `commitment`. | `commitment` + revealed `serverSeed` |
+| 4 | **Beacon authenticity.** The randomness is the named drand round's. | Re-fetch the round from the public beacon; show its randomness ≠ the record's. | drand `round` number + public beacon |
+| 5 | **Un-grindability (🟢 draws).** The round published *after* the commit, so the seed could not be pre-picked. | Show `timeOfRound(round) ≤ commitTime` — the round already existed at commit. | `commitTime` + `genesis + (round−1)·3s` |
+| 6 | **Cross-language identity.** All four reference verifiers agree byte-for-byte. | Get any two of JS / Python / Java / C++ to disagree on the same record. | the [verifiers](https://github.com/constarik/uvs/tree/master/verifiers) + a record |
+
+If any single row can be satisfied against a published draw, that draw is broken — provably, by anyone, permanently. That is the design intent: the standard is built to be refuted, and earns trust only by surviving the attempt.
+
+**What is *not* claimed** (so refutation is aimed honestly): UVS does not claim the *inputs* were honest — a rigged participant list, or a pool that differs from what entrants were promised, will still verify (§11). It does not claim a **notary**-only draw is un-grindable (§5.3, §8). It inherits the security of SHA-256 and drand. Those gaps are caught not by the algorithm but by the **public pre-commitment of inputs** (§5.2) and the audit trail — that is their job, not this one.
 
 ---
 
