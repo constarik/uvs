@@ -49,6 +49,8 @@ Every draw, raffle, lottery, or loot-box pull is the **same operation**:
 
 Rank 1 receives the first prize, rank 2 the second, and so on. "Winning a legendary item," "drawing a front-row seat," and "hitting the jackpot" are all the same thing — *where did my entry land in the ordering?* uvLottery makes that ordering a pure, reproducible function of public inputs. There is no hidden state and no private RNG.
 
+> **Why this matters — a public draw is not automatically a fair one.** On 1 December 1969 the US draft lottery was performed live on television, capsules drawn by hand from a glass drum — the very theatre of fairness. It was still biased: the capsules were loaded month-by-month and under-mixed, so late-year birthdates drew systematically worse numbers, and only post-hoc statistics caught it. uvLottery replaces the drum with a permutation that is **uniform by construction** *and* **recomputable by anyone** — the two things the drum could not guarantee.
+
 ---
 
 ## 3. Algorithm (normative)
