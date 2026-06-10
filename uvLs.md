@@ -153,7 +153,8 @@ Define the **commitment record** as the Canonical JSON (core §5) of `{ particip
 
 For a draw to classify 🟢, `commitmentHash` **MUST** carry evidence of existence before `timeOfRound(R)` that does not depend on trusting the operator. Acceptable evidence — any one of:
 
-- **Append-only public medium.** Inclusion of `commitmentHash` in a public transparency log, a public blockchain transaction, or an OpenTimestamps proof, at a position whose time is verifiably before `timeOfRound(R)`.
+- **RFC 3161 timestamp (recommended for short windows).** A timestamp token over `commitmentHash` from one or more independent RFC 3161 Time-Stamping Authorities, whose `genTime` is before `timeOfRound(R)` and whose signature verifies against the TSA's published certificate (e.g. `openssl ts -verify`). A TSA is operator-independent, so this is the **neutral-registry** path with an *immediate* token — the only acceptable evidence that fits a commit→`R` window of seconds to minutes. A single TSA trusts one authority's clock and key; stamping at **two independent TSAs in different jurisdictions** (e.g. FreeTSA + a commercial CA) is RECOMMENDED, making backdating-by-collusion implausible.
+- **Append-only public medium.** Inclusion of `commitmentHash` in a public transparency log, a public blockchain transaction, or an OpenTimestamps proof, at a position whose attested time is verifiably before `timeOfRound(R)`. **Note on OpenTimestamps:** an OTS proof qualifies only once its **Bitcoin confirmation has landed and that block's time precedes `timeOfRound(R)`** — a *pending* calendar attestation proves nothing about ordering. Because Bitcoin aggregation takes hours, OTS alone suits only draws announced hours-to-days ahead of `R`; for short windows it serves as a free **second** anchor that upgrades the record after the fact (trail-immutability, or an independent priority proof for long windows).
 - **Neutral registry.** A signature over `commitmentHash` by a published neutral-registry key (core §10.1) together with a signed timestamp before `timeOfRound(R)`, where the registry's signing log is itself publicly auditable.
 
 In addition, the commitment record **SHOULD** embed `randomness(R_c)` of a recent **past** round `R_c < R`. This pins a *lower* bound — the record cannot predate `R_c`'s publication — and narrows the window `[timeOfRound(R_c), timeOfRound(R)]` inside which an auditor must place the anchor. The lower bound alone is **not** sufficient evidence: it proves the record is not too old, not that it is old enough.
@@ -193,8 +194,8 @@ A uvLottery draw **SHOULD** publish a self-contained record sufficient for any t
   },
   "commitmentAnchor": {
     "commitmentHash": "<hex = SHA-256(canonical commitment record)>",
-    "kind":  "transparency-log | blockchain | opentimestamps | neutral-registry",
-    "proof": "<inclusion proof / txid / ots / signature+timestamp>",
+    "kind":  "rfc3161 | transparency-log | blockchain | opentimestamps | neutral-registry",
+    "proof": "<TSA token(s) / inclusion proof / txid / ots / signature+timestamp>",
     "lowerBoundRound": 29280000
   },
   "result": [ { "rank": 1, "id": "TICKET-0002", "prize": "SEAT", "score": "<hex>" } ]
