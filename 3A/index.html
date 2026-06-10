@@ -3,25 +3,30 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>UVS 3A · anchored draw (genuine 🟢)</title>
+<title>UVS 3A · one draw, two trust tiers (🟡 / 🟢)</title>
 <style>
   :root{ --bg:#04080f; --fg:#e8edf5; --dim:rgba(255,255,255,.5); --accent:#00d4ff; --green:#00ff88; --amber:#ffb000;
     --border:rgba(0,212,255,.2); --mono:'Courier New',monospace; }
   *{box-sizing:border-box} html,body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--mono);min-height:100vh}
   .wrap{max-width:760px;margin:0 auto;padding:40px 20px}
-  h1{font-size:1.6rem;letter-spacing:1px;margin:0 0 4px} h1 .v{color:var(--accent)}
-  .badge{display:inline-block;font-size:11px;letter-spacing:1px;border:1px solid var(--border);border-radius:20px;padding:4px 12px;color:var(--green)}
+  h1{font-size:1.5rem;letter-spacing:1px;margin:0 0 4px} h1 .v{color:var(--accent)}
+  .badge{display:inline-block;font-size:11px;letter-spacing:1px;border:1px solid var(--border);border-radius:20px;padding:4px 12px}
+  .badge.amber{color:var(--amber)} .badge.green{color:var(--green)}
   .tag{color:var(--dim);line-height:1.7;font-size:13px}
   a{color:var(--accent)}
   button{font-family:var(--mono);font-size:14px;letter-spacing:1px;background:rgba(0,255,136,.08);color:var(--green);
     border:1px solid var(--green);border-radius:6px;padding:12px 22px;cursor:pointer;transition:.15s}
   button:hover{background:rgba(0,255,136,.16)} button:disabled{opacity:.4;cursor:not-allowed}
+  .seg{display:flex;gap:0;margin:18px 0 6px;border:1px solid var(--border);border-radius:8px;overflow:hidden;width:fit-content}
+  .seg button{border:none;border-radius:0;background:transparent;color:var(--dim);padding:10px 18px;letter-spacing:1px}
+  .seg button.on{background:rgba(0,212,255,.12);color:var(--fg)}
+  .seg button:disabled{opacity:.45;cursor:not-allowed}
+  .modehint{font-size:11px;color:var(--dim);margin:0 0 14px;min-height:14px}
   .panel{border:1px solid var(--border);border-radius:8px;padding:16px 18px;margin:16px 0;background:rgba(255,255,255,.02)}
   .row{display:flex;justify-content:space-between;gap:12px;font-size:12px;padding:4px 0;border-bottom:1px dashed rgba(255,255,255,.06)}
   .row b{color:var(--dim);font-weight:400} .row span{word-break:break-all;text-align:right}
   .mono{font-size:11px;color:var(--dim);word-break:break-all}
   .ok{color:var(--green)} .warn{color:var(--amber)} .err{color:#ff5577}
-  .pending{border:1px solid var(--amber);background:rgba(255,176,0,.06);color:var(--amber)}
   .win{color:var(--green);font-weight:bold} table{width:100%;border-collapse:collapse;font-size:12px;margin-top:8px}
   td{padding:3px 6px;border-bottom:1px solid rgba(255,255,255,.06)} .hide{display:none}
   .step{font-size:11px;color:var(--accent);letter-spacing:2px;margin:18px 0 6px}
@@ -29,45 +34,62 @@
 </head>
 <body>
 <div class="wrap">
-  <h1>UVS <span class="v">3A</span> · anchored draw <span class="badge" id="tierBadge">🟢 outcome-bound + RFC-3161</span></h1>
-  <p class="tag">This is the <b>genuine 🟢</b> reference. The draw's commitment is timestamped at an independent
-    <b>RFC&nbsp;3161</b> authority <i>before</i> the future <b>drand</b> round publishes — proving it was committed
-    first (<a href="https://github.com/constarik/uvs/blob/master/uvLs.md" target="_blank">uvLs §5.4</a>), so the
-    operator could neither pre-pick the round nor backdate the commitment. The live
-    <a href="https://uvs.uncloned.work/draw" target="_blank">/draw</a> demo is honest <b>🟡</b> (no anchor yet); this is what 🟢 takes.</p>
+  <h1>UVS <span class="v">3A</span> · one draw, two trust tiers <span id="tierBadge" class="badge amber">🟡 instant</span></h1>
+  <p class="tag">The <b>same</b> uvLottery v3 draw, with the §5.4 commitment-anchor switched <b>off</b> or <b>on</b> — so you
+    can watch a draw move from honest <b>🟡</b> to genuine <b>🟢</b> on one screen. The trust tier is
+    <i>derived from the evidence present</i>, never claimed (<a href="https://github.com/constarik/uvs/blob/master/uvLs.md" target="_blank">uvLs §5.4</a>).</p>
 
-  <div id="pending" class="panel pending hide">🚧 <b>3A backend not yet live.</b> This is the anchored-draw reference
-    client; it activates automatically once the backend is deployed. (Backend: <span id="beUrl" class="mono"></span>)</div>
-
-  <div id="ready" class="hide">
-    <button id="run">▶ Run an anchored draw</button>
-    <div id="commitPanel" class="panel hide">
-      <div class="step">1 · COMMIT (timestamped before the round)</div>
-      <div class="row"><b>commitment</b><span id="c_commit" class="mono"></span></div>
-      <div class="row"><b>future drand round R</b><span id="c_round"></span></div>
-      <div class="row"><b>commitmentHash</b><span id="c_hash" class="mono"></span></div>
-      <div class="row"><b>RFC-3161 anchors</b><span id="c_tsas"></span></div>
-      <div class="row"><b>§5.4 — commitment stamped before R?</b><span id="c_ok"></span></div>
-      <div class="row"><b>OTS second anchor</b><span id="c_ots"></span></div>
-      <div id="countdown" class="mono" style="margin-top:8px"></div>
-    </div>
-    <div id="resultPanel" class="panel hide">
-      <div class="step">2 · REVEAL (after R published)</div>
-      <div class="row"><b>tier (derived)</b><span id="r_tier"></span></div>
-      <div class="row"><b>combinedSeed</b><span id="r_combined" class="mono"></span></div>
-      <table id="winners"></table>
-      <p class="tag" style="margin-top:10px">Re-derive it yourself in any language with the
-        <a href="https://github.com/constarik/uvs/tree/master/verifiers" target="_blank">reference verifiers</a>;
-        check the RFC-3161 token with <span class="mono">openssl ts -verify</span>.</p>
-    </div>
+  <div class="seg" id="seg">
+    <button id="mInstant" class="on">⚡ Instant&nbsp;🟡</button>
+    <button id="mAnchored" disabled>🔒 Anchored&nbsp;🟢</button>
   </div>
+  <p class="modehint" id="modehint">Instant: the draw runs entirely in your browser — no server, immediate.</p>
+
+  <button id="run">▶ Run a draw</button>
+
+  <!-- INSTANT (🟡) result -->
+  <div id="instantPanel" class="panel hide">
+    <div class="step">CLIENT-SIDE DRAW (no server)</div>
+    <div class="row"><b>serverSeed (generated in-browser)</b><span id="i_seed" class="mono"></span></div>
+    <div class="row"><b>commitment = SHA-256(serverSeed)</b><span id="i_commit" class="mono"></span></div>
+    <div class="row"><b>drand round (public reference)</b><span id="i_round"></span></div>
+    <div class="row"><b>combinedSeed</b><span id="i_combined" class="mono"></span></div>
+    <div class="row"><b>tier (derived)</b><span id="i_tier"></span></div>
+    <table id="i_winners"></table>
+    <p class="tag" style="margin-top:10px">This is honest <b>🟡</b>: the draw is real and re-derivable, but nothing proves the
+      seed was committed <i>before</i> this round — so it isn't outcome-bound. Flip to <b>🔒 Anchored</b> for the proof.</p>
+  </div>
+
+  <!-- ANCHORED (🟢) commit + reveal -->
+  <div id="commitPanel" class="panel hide">
+    <div class="step">1 · COMMIT (timestamped before the round)</div>
+    <div class="row"><b>commitment</b><span id="c_commit" class="mono"></span></div>
+    <div class="row"><b>future drand round R</b><span id="c_round"></span></div>
+    <div class="row"><b>commitmentHash</b><span id="c_hash" class="mono"></span></div>
+    <div class="row"><b>RFC-3161 anchors</b><span id="c_tsas"></span></div>
+    <div class="row"><b>§5.4 — commitment stamped before R?</b><span id="c_ok"></span></div>
+    <div class="row"><b>OTS second anchor</b><span id="c_ots"></span></div>
+    <div id="countdown" class="mono" style="margin-top:8px"></div>
+  </div>
+  <div id="resultPanel" class="panel hide">
+    <div class="step">2 · REVEAL (after R published)</div>
+    <div class="row"><b>tier (derived)</b><span id="r_tier"></span></div>
+    <div class="row"><b>combinedSeed</b><span id="r_combined" class="mono"></span></div>
+    <table id="winners"></table>
+    <p class="tag" style="margin-top:10px">Re-derive it in any language with the
+      <a href="https://github.com/constarik/uvs/tree/master/verifiers" target="_blank">reference verifiers</a>;
+      check the RFC-3161 token with <span class="mono">openssl ts -verify</span>.</p>
+  </div>
+
   <div id="msg" class="tag" style="margin-top:14px"></div>
   <p class="tag" style="margin-top:30px;font-size:11px">UVS — Uncloned Verification Standard ·
-    <a href="https://uvs.uncloned.work">uvs.uncloned.work</a></p>
+    <a href="https://uvs.uncloned.work">uvs.uncloned.work</a> · the always-on serverless 🟡 demo lives at
+    <a href="https://uvs.uncloned.work/draw">/draw</a></p>
 </div>
 
 <script>
 const BACKEND = new URLSearchParams(location.search).get('backend') || 'https://uvs-3a.onrender.com';
+const DRAND = 'https://api.drand.sh/v2/beacons/quicknet/rounds/latest';
 const $ = id => document.getElementById(id);
 const short = s => s ? (s.length > 24 ? s.slice(0,12)+'…'+s.slice(-8) : s) : '—';
 const tISO = t => new Date(t*1000).toISOString().replace('T',' ').replace('.000Z',' UTC');
@@ -75,21 +97,69 @@ function msg(t, cls){ $('msg').innerHTML = t; $('msg').className = 'tag ' + (cls
 
 const PARTICIPANTS = Array.from({length:20}, (_,i)=>'TICKET-'+String(i+1).padStart(4,'0'));
 const RULES = { winners:5, prizeLabel:'SEAT', prizePool:[{tier:'SEAT', count:5}] };
+const PRIZES = RULES.prizePool.reduce((a,e)=>{ for(let i=0;i<e.count;i++) a.push(e.tier); return a; }, []);
+
+// ---- WebCrypto helpers (same math as the reference verifiers) ----
+const enc = new TextEncoder();
+const toHex = buf => [...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,'0')).join('');
+async function sha256hex(str){ return toHex(await crypto.subtle.digest('SHA-256', enc.encode(str))); }
+async function sha256hexBytes(bytes){ return toHex(await crypto.subtle.digest('SHA-256', bytes)); }
+const hexToBytes = h => { const a = new Uint8Array(h.length/2); for(let i=0;i<a.length;i++) a[i]=parseInt(h.substr(i*2,2),16); return a; };
+const randHex = n => toHex(crypto.getRandomValues(new Uint8Array(n)));
+function winnersTable(rows){ let h='<tr><td>rank</td><td>id</td><td>prize</td></tr>';
+  rows.forEach(w=> h+='<tr><td>#'+w.rank+'</td><td class="win">'+w.id+'</td><td>'+w.prize+'</td></tr>'); return h; }
+
+// ---- mode state ----
+let mode = 'instant', backendUp = false;
+function setBadge(){ const b=$('tierBadge');
+  if(mode==='anchored'){ b.className='badge green'; b.textContent='🟢 outcome-bound + RFC-3161'; }
+  else { b.className='badge amber'; b.textContent='🟡 instant'; } }
+function selectMode(m){ if(m==='anchored' && !backendUp) return;
+  mode=m; $('mInstant').classList.toggle('on', m==='instant'); $('mAnchored').classList.toggle('on', m==='anchored');
+  $('modehint').textContent = m==='anchored'
+    ? 'Anchored: the server stamps the commitment at ×2 RFC-3161 TSAs before a future drand round (~10–15 s).'
+    : 'Instant: the draw runs entirely in your browser — no server, immediate.';
+  ['instantPanel','commitPanel','resultPanel'].forEach(id=>$(id).classList.add('hide')); msg(''); setBadge(); }
+$('mInstant').onclick = ()=>selectMode('instant');
+$('mAnchored').onclick = ()=>selectMode('anchored');
 
 (async function init(){
-  $('beUrl').textContent = BACKEND;
-  try {
-    const h = await fetch(BACKEND + '/health', {cache:'no-store'});
-    if (!h.ok) throw 0;
-    $('ready').classList.remove('hide');
-  } catch(e){
-    $('pending').classList.remove('hide');
-  }
+  try { const h = await fetch(BACKEND + '/health', {cache:'no-store'}); if(!h.ok) throw 0;
+    backendUp = true; $('mAnchored').disabled = false; $('mAnchored').textContent = '🔒 Anchored 🟢';
+  } catch(e){ backendUp = false; $('mAnchored').disabled = true; $('mAnchored').textContent = '🔒 Anchored 🟢 (backend offline)'; }
 })();
 
-$('run').onclick = async function(){
-  this.disabled = true; msg('Committing + timestamping at the TSAs (×2) + OpenTimestamps…');
-  $('commitPanel').classList.add('hide'); $('resultPanel').classList.add('hide');
+$('run').onclick = function(){ if(mode==='anchored') runAnchored.call(this); else runInstant.call(this); };
+
+// ===== INSTANT (🟡): fully client-side =====
+async function runInstant(){
+  this.disabled = true; msg('Running an instant draw in your browser…');
+  ['instantPanel','commitPanel','resultPanel'].forEach(id=>$(id).classList.add('hide'));
+  try {
+    const serverSeed = randHex(32);
+    const commitment = await sha256hex(serverSeed);
+    const j = await fetch(DRAND, {cache:'no-store'}).then(r=>r.json());          // public reference round
+    const randomness = await sha256hexBytes(hexToBytes(j.signature));            // = SHA-256(signature bytes)
+    const combined = await sha256hex(serverSeed + ':' + randomness);
+    const scored = await Promise.all(PARTICIPANTS.map(async id => ({ id, score: await sha256hex(combined + ':' + id) })));
+    scored.sort((a,b)=> a.score<b.score?1 : a.score>b.score?-1 : (a.id<b.id?-1:1));
+    const winners = scored.slice(0, PRIZES.length).map((p,i)=>({ rank:i+1, id:p.id, prize:PRIZES[i] }));
+    $('i_seed').textContent = short(serverSeed);
+    $('i_commit').textContent = short(commitment);
+    $('i_round').textContent = j.round;
+    $('i_combined').textContent = short(combined);
+    $('i_tier').innerHTML = '<span class="warn">🟡 amber (unanchored — no proof of commitment order)</span>';
+    $('i_winners').innerHTML = winnersTable(winners);
+    $('instantPanel').classList.remove('hide');
+    msg('Done — instant 🟡. Same math as 🟢, just without the §5.4 anchor. Switch to 🔒 Anchored to make it 🟢.', 'warn');
+  } catch(e){ msg('Instant draw failed: '+e.message, 'err'); }
+  this.disabled = false;
+}
+
+// ===== ANCHORED (🟢): backend commit → wait → reveal =====
+async function runAnchored(){
+  this.disabled = true; msg('Committing + timestamping at the TSAs (×2)…');
+  ['instantPanel','commitPanel','resultPanel'].forEach(id=>$(id).classList.add('hide'));
   let commit;
   try {
     const r = await fetch(BACKEND + '/commit', { method:'POST', headers:{'Content-Type':'application/json'},
@@ -123,7 +193,7 @@ $('run').onclick = async function(){
     if (left <= 0){ clearInterval(tick); doReveal(commit.sessionId); }
   }, 500);
   this.disabled = false;
-};
+}
 
 async function doReveal(sessionId){
   await new Promise(r=>setTimeout(r,1500));
@@ -137,10 +207,7 @@ async function doReveal(sessionId){
   $('r_tier').innerHTML = dr.tier === 'green' ? '<span class="ok">🟢 green (outcome-bound + §5.4 anchor)</span>'
     : '<span class="warn">'+dr.tier+'</span>';
   $('r_combined').textContent = short(dr.combinedSeed);
-  const rec = dr.result || [];
-  let html = '<tr><td>rank</td><td>id</td><td>prize</td></tr>';
-  rec.filter(x=>x.prize).forEach(w=> html += '<tr><td>#'+w.rank+'</td><td class="win">'+w.id+'</td><td>'+w.prize+'</td></tr>');
-  $('winners').innerHTML = html;
+  $('winners').innerHTML = winnersTable((dr.result||[]).filter(x=>x.prize));
   $('resultPanel').classList.remove('hide');
   msg('Done. This draw is <span class="ok">🟢</span> — re-derivable by anyone, and its commitment is provably earlier than the round.', 'ok');
 }
