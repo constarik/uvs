@@ -32,10 +32,12 @@ Verification of the §5.4 anchor is the spec's reference path: `openssl ts -veri
   independent* authorities in different jurisdictions; stamping is fault-tolerant (the draw needs
   only one token, keeps every token that answers), and the §5.4 gate requires *even the latest*
   token's `genTime` to predate R. One TSA going down or colluding does not break the evidence.
-- **OpenTimestamps — free second anchor (best-effort).** At commit, `commitmentHash` is also
-  submitted to the OTS calendars; the returned proof is *pending* and matures into a Bitcoin-block
-  trail-immutability anchor in ~hours. It **never blocks** the RFC-3161 green path: if the OTS lib or
-  calendars are unavailable the draw is still 🟢 on the TSA tokens alone (`/health` → `ots:false`).
+- **OpenTimestamps — free second anchor (opt-in, off by default).** The code path is built in:
+  when the `opentimestamps` package is installed, commit also submits `commitmentHash` to the OTS
+  calendars and attaches a *pending* proof that matures into a Bitcoin-block trail-immutability anchor
+  in ~hours. It is **off by default** so the image builds with zero dependencies and can't fail on
+  one; enable it by adding the `npm install` line shown in the `Dockerfile`. It **never blocks** the
+  green path — with or without OTS, the draw is 🟢 on the ×2 RFC-3161 tokens (`/health` → `ots:bool`).
 - **Persistent pending state.** Commit→reveal state is written to disk (`UVS_STATE_DIR`), so a process
   restart inside the window doesn't drop the session; `serverSeed` stays server-side until reveal.
 

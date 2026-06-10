@@ -8,7 +8,7 @@
     "start": "node 3a-server.js"
   },
   "engines": { "node": ">=18" },
-  "dependencies": { "opentimestamps": "0.4.9" },
+  "optionalDependencies": { "opentimestamps": "0.4.9" },
   "license": "MIT",
   "repository": "https://github.com/constarik/uvs"
 }
