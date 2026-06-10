@@ -101,7 +101,17 @@ async function reveal(req, res) {
     participants: s.participants, rules: s.rules, model: s.model
   });
   pending.del(sessionId);
-  send(res, 200, dr);
+  // reveal is the disclosure moment: return serverSeed + the drand round + the §5.4 anchor so the
+  // client can show/download the full proof and re-derive independently.
+  send(res, 200, Object.assign({}, dr, {
+    serverSeed: s.serverSeed,
+    drand: { beacon: drand.QUICKNET.beacon, chainHash: drand.QUICKNET.chainHash, round: s.fr.round,
+             randomness: r.randomness, roundTime: s.fr.time,
+             verifyUrl: 'https://api.drand.sh/' + drand.QUICKNET.chainHash + '/public/' + s.fr.round },
+    commitmentHash: s.commitmentHash,
+    commitmentAnchor: { kind: 'rfc3161', commitmentHash: s.commitmentHash, genTime: commitTime,
+                        tsa: tokens.map(t => t.tsa).join('+'), tokens, ots: s.ots || null }
+  }));
 }
 
 const server = http.createServer(async (req, res) => {

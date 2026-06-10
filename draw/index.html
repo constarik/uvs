@@ -13,10 +13,17 @@
     display:flex;flex-direction:column;align-items:center;padding:24px}
   .wrap{width:100%;max-width:680px}
   #errbar{display:none;background:#3a1014;border:1px solid #ff5d6c;color:#ffd7db;padding:10px 12px;border-radius:10px;margin-bottom:12px;font:12px ui-monospace,monospace;word-break:break-all}
-  header{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px}
+  header{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;gap:10px}
   h1{font-size:19px;margin:0;letter-spacing:.2px}
-  .badge{font-size:11px;color:#bfe3c9;background:rgba(52,209,126,.12);border:1px solid rgba(52,209,126,.4);padding:3px 9px;border-radius:999px;font-weight:600}
-  .tag{font-size:12.5px;color:var(--dim);margin:0 0 16px}
+  .badge{font-size:11px;padding:3px 9px;border-radius:999px;font-weight:600;white-space:nowrap}
+  .badge.amber{color:#f6e0a8;background:rgba(242,193,78,.12);border:1px solid rgba(242,193,78,.4)}
+  .badge.green{color:#bfe3c9;background:rgba(52,209,126,.12);border:1px solid rgba(52,209,126,.4)}
+  .tag{font-size:12.5px;color:var(--dim);margin:0 0 14px}
+  .seg{display:flex;border:1px solid var(--line);border-radius:11px;overflow:hidden;width:fit-content;margin-bottom:6px}
+  .seg button{border:none;background:transparent;color:var(--dim);padding:9px 16px;cursor:pointer;font:inherit;font-size:13px;font-weight:600}
+  .seg button.on{background:#1d2531;color:var(--ink)}
+  .seg button:disabled{opacity:.45;cursor:not-allowed}
+  .modehint{font-size:12px;color:#6b7686;margin:0 0 14px;min-height:16px}
   .modelbar{display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap}
   .modelbar label{font-size:12px;color:var(--dim)}
   .modelbar select{flex:1;min-width:160px;padding:9px 11px;border-radius:9px;border:1px solid var(--line);background:#11151b;color:var(--ink);font:inherit;cursor:pointer}
@@ -46,7 +53,7 @@
   .row.open .sc{display:block}
   .more{padding:9px 12px;color:var(--dim);font-size:12px;text-align:center}
   .kv{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;color:var(--dim);word-break:break-all;margin:8px 0}
-  .kv b{color:var(--ink)} .kv a{color:var(--blue)}
+  .kv b{color:var(--ink)} .kv a{color:var(--blue)} .kv .ok{color:var(--green)} .kv .warn{color:var(--gold)} .kv .err{color:var(--red)}
   details{background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:12px 15px;margin-bottom:12px}
   summary{cursor:pointer;color:var(--blue);font-weight:600;font-size:13px}
   .mut{color:#6b7686;font-size:12px;line-height:1.5}
@@ -58,12 +65,17 @@
 <body>
 <div class="wrap">
   <div id="errbar"></div>
-  <header><h1>🎲 Run a draw</h1><span class="badge" title="Outcome-bound to a future drand round, but the commitment's publication time is not yet independently attested (uvLs §5.4) — so this draw honestly classifies 🟡, not 🟢. RFC-3161 timestamping is coming; that lifts it to 🟢.">UVS + drand 🟡 outcome-bound</span></header>
-  <p class="tag">Pick a model and run it. The randomness comes from a <b>drand</b> round that hasn't happened yet —
-    so neither side can pre-pick it. When the round publishes (~seconds) the draw is sealed; the result is then
-    re-derivable by anyone, in any language. <b>Tier 🟡</b>, honestly: the proof that the commitment
-    <i>preceded</i> the round currently rests on this page's word (uvLs §5.4). Independent RFC-3161
-    timestamping ships next — that, not a claim, makes a draw 🟢.</p>
+  <header><h1>🎲 Run a draw</h1><span class="badge amber" id="badge" title="The trust tier is derived from the evidence present, not claimed (uvLs §5.4).">UVS + drand 🟡 outcome-bound</span></header>
+  <p class="tag">The <b>same</b> uvLottery v3 draw, two trust tiers. <b>In-browser 🟡</b> runs on this page and is honestly 🟡:
+    the proof that the commitment <i>preceded</i> the round rests on the page's word. <b>Anchored 🟢</b> routes through a
+    backend that timestamps the commitment at ×2 independent <b>RFC-3161</b> TSAs <i>before</i> the round — genuine 🟢
+    (<a href="https://github.com/constarik/uvs/blob/master/uvLs.md" target="_blank" rel="noopener" style="color:var(--blue)">uvLs §5.4</a>).</p>
+
+  <div class="seg" id="seg">
+    <button id="mInstant" class="on">⚡ In-browser&nbsp;🟡</button>
+    <button id="mAnchored" disabled>🔒 Anchored&nbsp;🟢</button>
+  </div>
+  <p class="modehint" id="modehint">In-browser: the draw runs entirely on this page — no server.</p>
 
   <div class="modelbar">
     <label for="preset">Model</label>
@@ -72,6 +84,15 @@
   <p class="modelnote" id="modelnote"></p>
   <button class="go" id="go">RUN THE DRAW</button>
   <div class="status" id="status">Free entry, deterministic outcome. Click run.</div>
+
+  <div class="card" id="anchorCard" style="display:none">
+    <h2>§5.4 commitment-anchor (RFC-3161)</h2>
+    <div class="kv"><b>commitment</b> <span id="aCommit">—</span></div>
+    <div class="kv"><b>future drand round R</b> <span id="aRound">—</span></div>
+    <div class="kv"><b>RFC-3161 anchors</b><br><span id="aTsas">—</span></div>
+    <div class="kv"><b>§5.4 — stamped before R?</b> <span id="aOk">—</span></div>
+    <div class="kv"><b>OTS second anchor</b> <span id="aOts">—</span></div>
+  </div>
 
   <div class="you" id="youCard" style="display:none">
     <div class="lbl">Your entry</div>
@@ -175,29 +196,31 @@ var PRESETS=[
 var $=function(id){return document.getElementById(id);};
 var current=null;
 
-async function run(){
-  var pIdx=parseInt($('preset').value)||0, rec=PRESETS[pIdx];
-  $('go').disabled=true; $('youCard').style.display='none'; $('distCard').style.display='none'; $('proof').style.display='none';
-  var serverSeed=randHex(32);
-  $('status').innerHTML='Committed a secret seed <b>'+sha256hex(serverSeed).slice(0,16)+'…</b> · picking a future drand round…';
-  var fr=futureRound(Date.now()/1000,9), rnd;
-  try{ rnd=await pollRound(fr,$('status')); }
-  catch(e){ $('status').innerHTML='<span style="color:var(--red)">drand unreachable: '+e.message+' (need internet)</span>'; $('go').disabled=false; return; }
-  $('status').innerHTML='<span class="ok">drand round '+fr+' published.</span> Computing '+rec.M.toLocaleString()+' entries…';
-  await new Promise(function(r){setTimeout(r,20);});
-  var combined=sha256hex(serverSeed+':'+rnd.randomness);
-  var arr=[]; for(var i=0;i<rec.M;i++){var id=rec.prefix+String(i+1).padStart(rec.pad,'0'); arr.push({id:id,score:sha256hex(combined+':'+id)});}
-  arr.sort(function(a,b){ if(a.score>b.score)return -1; if(a.score<b.score)return 1; return a.id<b.id?-1:a.id>b.id?1:0; });
-  var cum=[],c=0; rec.tiers.forEach(function(t){c+=t.count;cum.push(c);});
-  function tierAtRank(rank){ for(var j=0;j<rec.tiers.length;j++){ if(rank<=cum[j]) return rec.tiers[j]; } return rec.tiers[rec.tiers.length-1]; }
-  var ranked=[],byId={};
-  for(var i=0;i<arr.length;i++){ var row={rank:i+1,id:arr[i].id,score:arr[i].score,tier:tierAtRank(i+1)}; ranked.push(row); byId[arr[i].id]=row; }
-  current={rec:rec,combined:combined,ranked:ranked,byId:byId,serverSeed:serverSeed,drand:{round:fr,randomness:rnd.randomness}};
+/* ── mode (🟡 in-browser / 🟢 anchored backend) ── */
+var BACKEND=new URLSearchParams(location.search).get('backend')||'https://uvs-3a.onrender.com';
+var mode='instant', backendUp=false;
+function setBadge(tier){ var b=$('badge');
+  if(tier==='green'){ b.className='badge green'; b.textContent='UVS + drand 🟢 + RFC-3161'; }
+  else { b.className='badge amber'; b.textContent='UVS + drand 🟡 outcome-bound'; } }
+function selectMode(m){ if(m==='anchored'&&!backendUp) return; mode=m;
+  $('mInstant').classList.toggle('on',m==='instant'); $('mAnchored').classList.toggle('on',m==='anchored');
+  $('modehint').textContent = m==='anchored'
+    ? 'Anchored: a backend stamps the commitment at ×2 RFC-3161 TSAs before a future drand round (~10–15 s), then reveals.'
+    : 'In-browser: the draw runs entirely on this page — no server.';
+  setBadge('amber');   // tier is shown only after a real result — selecting a mode never claims 🟢
+  ['anchorCard','youCard','distCard','proof','dlbar'].forEach(function(id){$(id).style.display='none';});
+  $('shareLine').innerHTML=''; $('status').innerHTML='Free entry, deterministic outcome. Click run.'; }
 
-  var youId=rec.prefix+String(1+Math.floor(Math.random()*rec.M)).padStart(rec.pad,'0'), you=byId[youId];
+function tierBuckets(rec){ var cum=[],c=0; rec.tiers.forEach(function(t){c+=t.count;cum.push(c);});
+  return function(rank){ for(var j=0;j<rec.tiers.length;j++){ if(rank<=cum[j]) return rec.tiers[j]; } return rec.tiers[rec.tiers.length-1]; }; }
+
+/* render the distribution + "you" + proof + share + download from the global `current` */
+function renderAll(rec){
+  var c=current;
+  var youId=rec.prefix+String(1+Math.floor(Math.random()*rec.M)).padStart(rec.pad,'0'), you=c.byId[youId];
   $('youId').textContent='You are '+youId;
   $('youRes').textContent=you.tier.label; $('youRes').style.color=you.tier.color;
-  $('youWhy').textContent='rank '+you.rank.toLocaleString()+' of '+rec.M.toLocaleString()+' — re-derive it yourself in “Find” terms below, or with any verifier.';
+  $('youWhy').textContent='rank '+you.rank.toLocaleString()+' of '+rec.M.toLocaleString()+' — re-derive it yourself below, or with any verifier.';
 
   var box=$('chips'); box.innerHTML='';
   rec.tiers.forEach(function(t){
@@ -209,16 +232,78 @@ async function run(){
   });
   showTier(rec.tiers[0].key); var f=document.querySelector('.chip'); if(f) f.classList.add('on');
 
-  $('pSeed').textContent=serverSeed; $('pComb').textContent=combined;
-  var DURL='https://api.drand.sh/'+CHAIN+'/public/'+fr;
-  $('pDrand').innerHTML='round <b>'+fr+'</b> · randomness <b>'+rnd.randomness.slice(0,16)+'…</b> '
+  $('pSeed').textContent=c.serverSeed; $('pComb').textContent=c.combined;
+  var DURL='https://api.drand.sh/'+CHAIN+'/public/'+c.drand.round;
+  $('pDrand').innerHTML='round <b>'+c.drand.round+'</b> · randomness <b>'+c.drand.randomness.slice(0,16)+'…</b> '
     +'<button class="drand" onclick="verifyDrand()">✓ verify drand</button> <a href="'+DURL+'" target="_blank" rel="noopener" style="font-size:11px">raw ↗</a>'
     +'<div id="drandVerdict" style="font-size:12px;margin-top:6px"></div>';
 
-  var shareUrl='/results/?p='+pIdx+'&seed='+serverSeed+'&round='+fr+'&rand='+rnd.randomness;
+  var pIdx=parseInt($('preset').value)||0;
+  var shareUrl='/results/?p='+pIdx+'&seed='+c.serverSeed+'&round='+c.drand.round+'&rand='+c.drand.randomness;
   $('shareLine').innerHTML='<a href="'+shareUrl+'" target="_blank" rel="noopener" style="color:var(--blue)">🔗 Share this result (permalink) ↗</a> — opens the exact same finished draw for anyone to re-open &amp; verify.';
   $('youCard').style.display='block'; $('distCard').style.display='block'; $('proof').style.display='block'; $('dlbar').style.display='block';
-  $('status').innerHTML='<span class="ok">Done.</span> '+rec.M.toLocaleString()+' entries, sealed by drand round '+fr+' — re-derivable by anyone.';
+}
+
+/* ── 🟡 in-browser draw (no server) ── */
+async function runInstant(){
+  var pIdx=parseInt($('preset').value)||0, rec=PRESETS[pIdx];
+  $('go').disabled=true; ['anchorCard','youCard','distCard','proof','dlbar'].forEach(function(id){$(id).style.display='none';});
+  var serverSeed=randHex(32);
+  $('status').innerHTML='Committed a secret seed <b>'+sha256hex(serverSeed).slice(0,16)+'…</b> · picking a future drand round…';
+  var fr=futureRound(Date.now()/1000,9), rnd;
+  try{ rnd=await pollRound(fr,$('status')); }
+  catch(e){ $('status').innerHTML='<span style="color:var(--red)">drand unreachable: '+e.message+' (need internet)</span>'; $('go').disabled=false; return; }
+  $('status').innerHTML='<span class="ok">drand round '+fr+' published.</span> Computing '+rec.M.toLocaleString()+' entries…';
+  await new Promise(function(r){setTimeout(r,20);});
+  var combined=sha256hex(serverSeed+':'+rnd.randomness);
+  var arr=[]; for(var i=0;i<rec.M;i++){var id=rec.prefix+String(i+1).padStart(rec.pad,'0'); arr.push({id:id,score:sha256hex(combined+':'+id)});}
+  arr.sort(function(a,b){ if(a.score>b.score)return -1; if(a.score<b.score)return 1; return a.id<b.id?-1:a.id>b.id?1:0; });
+  var tierAtRank=tierBuckets(rec), ranked=[],byId={};
+  for(var i=0;i<arr.length;i++){ var row={rank:i+1,id:arr[i].id,score:arr[i].score,tier:tierAtRank(i+1)}; ranked.push(row); byId[arr[i].id]=row; }
+  current={rec:rec,combined:combined,ranked:ranked,byId:byId,serverSeed:serverSeed,drand:{round:fr,randomness:rnd.randomness}};
+  renderAll(rec); setBadge('amber');
+  $('status').innerHTML='<span class="ok">Done — 🟡.</span> '+rec.M.toLocaleString()+' entries, sealed by drand round '+fr+' — re-derivable by anyone. Switch to 🔒 Anchored for genuine 🟢.';
+  $('go').disabled=false;
+}
+
+/* ── 🟢 anchored draw (backend stamps the commitment at ×2 RFC-3161 TSAs before R) ── */
+async function runAnchored(){
+  var pIdx=parseInt($('preset').value)||0, rec=PRESETS[pIdx];
+  $('go').disabled=true; ['anchorCard','youCard','distCard','proof','dlbar'].forEach(function(id){$(id).style.display='none';});
+  var participants=[]; for(var i=0;i<rec.M;i++) participants.push(rec.prefix+String(i+1).padStart(rec.pad,'0'));
+  var prizePool=rec.tiers.map(function(t){return {tier:t.label,count:t.count};});
+  $('status').innerHTML='Committing + timestamping at ×2 RFC-3161 TSAs…';
+  var commit;
+  try{ var r=await fetch(BACKEND+'/commit',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({participants:participants,rules:{prizePool:prizePool},model:rec.name})});
+    commit=await r.json(); if(!r.ok) throw new Error(commit.error||'commit failed'); }
+  catch(e){ $('status').innerHTML='<span style="color:var(--red)">commit failed: '+e.message+'</span>'; $('go').disabled=false; return; }
+
+  var anchor=commit.commitmentAnchor||{}, tokens=anchor.tokens||[], Rtime=commit.roundTime;
+  $('aCommit').textContent=(commit.commitment||'').slice(0,16)+'…';
+  $('aRound').textContent=commit.round;
+  $('aTsas').innerHTML = tokens.length ? tokens.map(function(t){ return '<span class="ok">'+t.tsa+'</span> '+(t.genTime? new Date(t.genTime*1000).toISOString().replace('T',' ').replace('.000Z',' UTC'):'—'); }).join('<br>') : '—';
+  var beforeCount=tokens.filter(function(t){return t.genTime&&t.genTime<Rtime;}).length;
+  $('aOk').innerHTML = beforeCount>=1 ? '<span class="ok">YES ✓ '+beforeCount+'/'+tokens.length+' independent TSAs stamped before R</span>' : '<span class="err">NO</span>';
+  $('aOts').innerHTML = (commit.ots&&commit.ots.proof) ? '<span class="ok">submitted</span> · '+(commit.ots.status||'pending') : '<span class="warn">not enabled</span>';
+  $('anchorCard').style.display='block';
+  $('status').innerHTML='Committed. Waiting for drand round '+commit.round+' to publish…';
+
+  var waitMs=Math.max(0,(Rtime-Math.floor(Date.now()/1000)+2))*1000;
+  await new Promise(function(r){setTimeout(r,waitMs);});
+  var dr;
+  try{ var r2=await fetch(BACKEND+'/reveal',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:commit.sessionId})});
+    dr=await r2.json(); if(!r2.ok||dr.ok===false) throw new Error(dr.error||'reveal failed'); }
+  catch(e){ $('status').innerHTML='<span style="color:var(--red)">reveal failed: '+e.message+' — try again.</span>'; $('go').disabled=false; return; }
+
+  var tierByLabel={}; rec.tiers.forEach(function(t){tierByLabel[t.label]=t;});
+  var ranked=(dr.result||[]).map(function(r){return {rank:r.rank,id:r.id,score:r.score,tier:tierByLabel[r.prize]||rec.tiers[rec.tiers.length-1]};});
+  var byId={}; ranked.forEach(function(r){byId[r.id]=r;});
+  current={rec:rec,combined:dr.combinedSeed,ranked:ranked,byId:byId,serverSeed:dr.serverSeed,drand:{round:dr.drand.round,randomness:dr.drand.randomness}};
+  renderAll(rec); setBadge(dr.tier==='green'?'green':'amber');
+  $('status').innerHTML = dr.tier==='green'
+    ? '<span class="ok">Done — 🟢.</span> Commitment timestamped before drand round '+commit.round+' by ×2 independent RFC-3161 TSAs (§5.4).'
+    : '<span class="warn">Done — '+dr.tier+'.</span> (anchor evidence incomplete)';
   $('go').disabled=false;
 }
 
@@ -243,10 +328,11 @@ async function verifyDrand(){
 
 function downloadRecord(){
   if(!current) return;
-  var c=current, seed=c.serverSeed||c.rec.serverSeed, drand=c.drand||c.rec.drand;
+  var c=current, seed=c.serverSeed, drand=c.drand;
   var rec={
     uvs:'verifiable-allocation/v1',
     model:c.rec.name||c.rec.title||'draw',
+    tier: ($('badge').className.indexOf('green')>=0) ? 'green' : 'amber',
     rules:{
       participants:c.rec.M, idPrefix:c.rec.prefix,
       prizePool:c.rec.tiers.map(function(t){return {tier:t.label,key:t.key,count:t.count,pct:+(100*t.count/c.rec.M).toFixed(3)};}),
@@ -266,8 +352,14 @@ function downloadRecord(){
   PRESETS.forEach(function(p,i){ var o=document.createElement('option'); o.value=i; o.textContent=p.name; sel.appendChild(o); });
   function note(){ $('modelnote').textContent=PRESETS[parseInt(sel.value)||0].note; }
   sel.onchange=note; note();
-  $('go').onclick=run;
+  $('go').onclick=function(){ if(mode==='anchored') runAnchored(); else runInstant(); };
   $('dlBtn').onclick=downloadRecord;
+  $('mInstant').onclick=function(){ selectMode('instant'); };
+  $('mAnchored').onclick=function(){ selectMode('anchored'); };
+  // probe the backend; enable the 🟢 toggle only if it's up
+  fetch(BACKEND+'/health',{cache:'no-store'}).then(function(h){ if(!h.ok) throw 0; backendUp=true;
+    $('mAnchored').disabled=false; $('mAnchored').textContent='🔒 Anchored 🟢';
+  }).catch(function(){ backendUp=false; $('mAnchored').disabled=true; $('mAnchored').textContent='🔒 Anchored 🟢 (offline)'; });
 })();
 </script>
 </body>
