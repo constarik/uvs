@@ -18,6 +18,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const https = require('https');
+const http = require('http');
 
 function _tmp(ext) { return path.join(os.tmpdir(), 'uvs3a_' + Math.random().toString(16).slice(2) + ext); }
 
@@ -29,15 +30,23 @@ function buildRequest(hashHex, openssl) {
   const buf = fs.readFileSync(out); fs.unlinkSync(out); return buf;
 }
 
-/** PRODUCTION: POST the .tsq to a public TSA over HTTPS; resolve the .tsr token bytes. */
-function postToTSA(tsq, tsaUrl) {
+/** PRODUCTION: POST the .tsq to a public TSA (http or https); resolve the .tsr token bytes.
+ *  Commercial TSAs (DigiCert, Sectigo, ...) speak plain http; FreeTSA speaks https. */
+function postToTSA(tsq, tsaUrl, timeoutMs) {
   return new Promise((resolve, reject) => {
     const u = new URL(tsaUrl);
-    const req = https.request({
-      hostname: u.hostname, port: u.port || 443, path: u.pathname + u.search, method: 'POST',
+    const isHttp = u.protocol === 'http:';
+    const lib = isHttp ? http : https;
+    const req = lib.request({
+      hostname: u.hostname, port: u.port || (isHttp ? 80 : 443), path: u.pathname + u.search, method: 'POST',
       headers: { 'Content-Type': 'application/timestamp-query', 'Content-Length': tsq.length }
-    }, res => { const c = []; res.on('data', d => c.push(d)); res.on('end', () => resolve(Buffer.concat(c))); });
-    req.on('error', reject); req.write(tsq); req.end();
+    }, res => {
+      if (res.statusCode && res.statusCode >= 400) { res.resume(); return reject(new Error('TSA HTTP ' + res.statusCode)); }
+      const c = []; res.on('data', d => c.push(d)); res.on('end', () => resolve(Buffer.concat(c)));
+    });
+    req.on('error', reject);
+    req.setTimeout(timeoutMs || 15000, () => req.destroy(new Error('TSA timeout')));
+    req.write(tsq); req.end();
   });
 }
 
@@ -81,18 +90,28 @@ function verify(hashHex, tsr, caFile, openssl) {
 /**
  * High-level: stamp `commitmentHash` at a list of TSAs and return §5.4 anchor evidence.
  * @param tsas  [{ name, url }]  (production) — or [{ name, local: tsaDir }] (test).
- * @returns {Promise<{ commitmentHash, tokens: [{ tsa, proof(base64), genTime }] }>}
+ * @returns {Promise<{ commitmentHash, tokens: [{ tsa, proof(base64), genTime }], errors }>}
+ *
+ * FAULT-TOLERANT: stamps EVERY TSA independently and keeps the ones that answer.
+ * Two TSAs in different jurisdictions = the §5.4 evidence survives one TSA colluding
+ * or going down (uvLs §5.4, ×2 RECOMMENDED). Requires at least one token; records the
+ * rest as errors so the caller can see partial strength.
  */
 async function stamp(hashHex, tsas, opts) {
   opts = opts || {};
   const openssl = opts.openssl || 'openssl';
   const tsq = buildRequest(hashHex, openssl);
-  const tokens = [];
+  const tokens = [], errors = [];
   for (const t of tsas) {
-    const tsr = t.local ? localReply(tsq, t.local, openssl) : await postToTSA(tsq, t.url);
-    tokens.push({ tsa: t.name, proof: tsr.toString('base64'), genTime: _genTime(tsr, openssl) });
+    try {
+      const tsr = t.local ? localReply(tsq, t.local, openssl) : await postToTSA(tsq, t.url, opts.timeoutMs);
+      const genTime = _genTime(tsr, openssl);
+      if (genTime == null) throw new Error('token has no parseable genTime');
+      tokens.push({ tsa: t.name, proof: tsr.toString('base64'), genTime });
+    } catch (e) { errors.push({ tsa: t.name, error: e.message }); }
   }
-  return { commitmentHash: hashHex, kind: 'rfc3161', tokens };
+  if (!tokens.length) throw new Error('all TSAs failed: ' + errors.map(e => e.tsa + ':' + e.error).join('; '));
+  return { commitmentHash: hashHex, kind: 'rfc3161', tokens, errors };
 }
 
 module.exports = { buildRequest, postToTSA, localReply, verify, stamp };

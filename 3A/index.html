@@ -46,8 +46,9 @@
       <div class="row"><b>commitment</b><span id="c_commit" class="mono"></span></div>
       <div class="row"><b>future drand round R</b><span id="c_round"></span></div>
       <div class="row"><b>commitmentHash</b><span id="c_hash" class="mono"></span></div>
-      <div class="row"><b>RFC-3161 token genTime</b><span id="c_gen"></span></div>
-      <div class="row"><b>§5.4 — genTime &lt; timeOfRound(R)?</b><span id="c_ok"></span></div>
+      <div class="row"><b>RFC-3161 anchors</b><span id="c_tsas"></span></div>
+      <div class="row"><b>§5.4 — all stamps &lt; timeOfRound(R)?</b><span id="c_ok"></span></div>
+      <div class="row"><b>OTS second anchor</b><span id="c_ots"></span></div>
       <div id="countdown" class="mono" style="margin-top:8px"></div>
     </div>
     <div id="resultPanel" class="panel hide">
@@ -87,7 +88,7 @@ const RULES = { winners:5, prizeLabel:'SEAT', prizePool:[{tier:'SEAT', count:5}]
 })();
 
 $('run').onclick = async function(){
-  this.disabled = true; msg('Committing + timestamping at the TSA…');
+  this.disabled = true; msg('Committing + timestamping at the TSAs (×2) + OpenTimestamps…');
   $('commitPanel').classList.add('hide'); $('resultPanel').classList.add('hide');
   let commit;
   try {
@@ -96,14 +97,24 @@ $('run').onclick = async function(){
     commit = await r.json(); if (!r.ok) throw new Error(commit.error||'commit failed');
   } catch(e){ msg('Commit failed: '+e.message, 'err'); this.disabled=false; return; }
 
-  const tok = (commit.commitmentAnchor.tokens||[])[0] || {};
+  const anchor = commit.commitmentAnchor || {};
+  const tokens = anchor.tokens || [];
   const Rtime = commit.roundTime;
   $('c_commit').textContent = short(commit.commitment);
   $('c_round').textContent = commit.round;
   $('c_hash').textContent = short(commit.commitmentHash);
-  $('c_gen').textContent = tok.genTime ? tISO(tok.genTime) : '—';
-  const before = tok.genTime && tok.genTime < Rtime;
-  $('c_ok').innerHTML = before ? '<span class="ok">YES ✓ committed before R</span>' : '<span class="err">NO</span>';
+  $('c_tsas').innerHTML = tokens.length
+    ? tokens.map(t => '<span class="ok">'+t.tsa+'</span> '+(t.genTime ? tISO(t.genTime) : '—')).join('<br>')
+    : '—';
+  const maxGen = tokens.length ? Math.max.apply(null, tokens.map(t => t.genTime||0)) : 0;
+  const before = maxGen && maxGen < Rtime;
+  $('c_ok').innerHTML = before
+    ? '<span class="ok">YES ✓ '+tokens.length+' independent TSA'+(tokens.length>1?'s':'')+' stamped before R</span>'
+    : '<span class="err">NO</span>';
+  const ots = commit.ots;
+  $('c_ots').innerHTML = (ots && ots.proof)
+    ? '<span class="ok">submitted</span> · '+(ots.status||'pending')+' — matures on Bitcoin (~hours)'
+    : '<span class="warn">not enabled</span>';
   $('commitPanel').classList.remove('hide');
   msg('Committed. Waiting for drand round '+commit.round+' to publish…');
 

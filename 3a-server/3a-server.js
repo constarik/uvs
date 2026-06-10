@@ -24,18 +24,32 @@ const drand = require('./uvs-anchor-drand.js');
 const { makeLottery } = require('./uvs-lottery.js');
 const { createHost } = require('./uvs-host.js');
 const rfc = require('./uvs-anchor-rfc3161.js');
+const ots = require('./uvs-anchor-ots.js');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
 
 const sha256 = (s) => crypto.createHash('sha256').update(s).digest('hex');
 // drand randomness = SHA-256(signature BYTES); the v2 API returns {round,signature} only.
 const hashBytes = (hex) => crypto.createHash('sha256').update(Buffer.from(hex, 'hex')).digest('hex');
 const OPENSSL = process.env.UVS_OPENSSL || 'openssl';
-const AHEAD = parseInt(process.env.UVS_ROUND_AHEAD || '9', 10);   // seconds until R
+const AHEAD = parseInt(process.env.UVS_ROUND_AHEAD || '30', 10);  // seconds until R (headroom so ALL TSA stamps land before R)
 const TSAS = process.env.UVS_TSA_LOCAL
   ? [{ name: 'local', local: process.env.UVS_TSA_LOCAL }]
-  : [{ name: 'freetsa', url: 'https://freetsa.org/tsr' }];        // add a 2nd jurisdiction in prod (×2)
+  : [{ name: 'freetsa', url: 'https://freetsa.org/tsr' },          // ×2 independent TSAs, different
+     { name: 'digicert', url: 'http://timestamp.digicert.com' }]; // operators/jurisdictions (uvLs §5.4)
 
 const host = createHost({ sha256, versions: [1, 2, 3] }).use(makeLottery({ sha256, name: 'lottery' }));
-const pending = new Map();   // sessionId -> commit state (in-memory; swap for storage in prod)
+
+// Pending commit→reveal state, persisted to disk so it survives a process restart inside the
+// commit→reveal window (serverSeed stays secret on the server until reveal). One file per session.
+const STATE_DIR = process.env.UVS_STATE_DIR || path.join(os.tmpdir(), 'uvs3a-pending');
+try { fs.mkdirSync(STATE_DIR, { recursive: true }); } catch (e) {}
+const pending = {
+  put(id, rec) { try { fs.writeFileSync(path.join(STATE_DIR, id + '.json'), JSON.stringify(rec)); } catch (e) {} },
+  get(id) { try { return JSON.parse(fs.readFileSync(path.join(STATE_DIR, id + '.json'), 'utf8')); } catch (e) { return null; } },
+  del(id) { try { fs.unlinkSync(path.join(STATE_DIR, id + '.json')); } catch (e) {} }
+};
 
 const CORS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'POST, GET, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type' };
 function send(res, code, obj) { const b = JSON.stringify(obj); res.writeHead(code, Object.assign({ 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(b) }, CORS)); res.end(b); }
@@ -49,12 +63,19 @@ async function commit(req, res) {
   const fr = drand.futureRound(Math.floor(Date.now() / 1000), AHEAD);
   const commitmentRecord = { participants, prizePool: rules.prizePool || rules, commitment, chainHash: drand.QUICKNET.chainHash, round: fr.round };
   const commitmentHash = sha256(UVSCore.canonicalJSON(commitmentRecord));
-  let anchor;
-  try { anchor = await rfc.stamp(commitmentHash, TSAS, { openssl: OPENSSL }); }
-  catch (e) { return send(res, 502, { error: 'TSA stamping failed: ' + e.message }); }
+  let anchor, otsProof;
+  try {
+    // RFC-3161 (primary; must succeed for 🟢) and OpenTimestamps (free second anchor; best-effort)
+    // run concurrently — both only need commitmentHash, so commit latency ≈ the slower of the two.
+    const [a, o] = await Promise.all([
+      rfc.stamp(commitmentHash, TSAS, { openssl: OPENSSL }),
+      ots.stamp(commitmentHash, { timeoutMs: 12000 }).catch(e => ({ ok: false, error: e.message }))
+    ]);
+    anchor = a; otsProof = (o && o.ok) ? o : null;
+  } catch (e) { return send(res, 502, { error: 'TSA stamping failed: ' + e.message }); }
   const sessionId = crypto.randomBytes(8).toString('hex');
-  pending.set(sessionId, { serverSeed, commitment, fr, participants, rules, model: model || 'tickets', commitmentHash, anchor });
-  send(res, 200, { sessionId, commitment, round: fr.round, roundTime: fr.time, commitmentHash, commitmentAnchor: anchor });
+  pending.put(sessionId, { serverSeed, commitment, fr, participants, rules, model: model || 'tickets', commitmentHash, anchor, ots: otsProof });
+  send(res, 200, { sessionId, commitment, round: fr.round, roundTime: fr.time, commitmentHash, commitmentAnchor: anchor, ots: otsProof });
 }
 
 async function reveal(req, res) {
@@ -65,14 +86,20 @@ async function reveal(req, res) {
   let r;
   try { r = await drand.fetchRound(s.fr.round, { fetch: globalThis.fetch, hashBytes }); }
   catch (e) { return send(res, 502, { error: 'drand fetch failed: ' + e.message }); }
-  const token = s.anchor.tokens[0];
+  const tokens = s.anchor.tokens;
+  // conservative §5.4 gate: require even the LATEST TSA stamp to predate R (so ALL tokens predate R).
+  const commitTime = Math.max.apply(null, tokens.map(t => t.genTime));
   const dr = await host.draw('lottery', {
-    serverSeed: s.serverSeed, commitment: s.commitment, commitTime: token.genTime,
+    serverSeed: s.serverSeed, commitment: s.commitment, commitTime,
     drand: { round: s.fr.round, randomness: r.randomness },
-    commitmentAnchor: { kind: 'rfc3161', commitmentHash: s.commitmentHash, proof: token.proof, genTime: token.genTime, tsa: token.tsa },
+    commitmentAnchor: {
+      kind: 'rfc3161', commitmentHash: s.commitmentHash,
+      proof: tokens[0].proof, genTime: commitTime, tsa: tokens.map(t => t.tsa).join('+'),
+      tokens, ots: s.ots || null            // all RFC-3161 tokens + optional OTS second anchor (matures on Bitcoin)
+    },
     participants: s.participants, rules: s.rules, model: s.model
   });
-  pending.delete(sessionId);
+  pending.del(sessionId);
   send(res, 200, dr);
 }
 
@@ -81,7 +108,7 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'OPTIONS') { res.writeHead(204, CORS); return res.end(); }
     if (req.method === 'POST' && req.url === '/commit') return await commit(req, res);
     if (req.method === 'POST' && req.url === '/reveal') return await reveal(req, res);
-    if (req.method === 'GET' && req.url === '/health') return send(res, 200, { ok: true, tsas: TSAS.map(t => t.name), ahead: AHEAD });
+    if (req.method === 'GET' && req.url === '/health') return send(res, 200, { ok: true, tsas: TSAS.map(t => t.name), ahead: AHEAD, ots: ots.available() });
     send(res, 404, { error: 'POST /commit | POST /reveal | GET /health' });
   } catch (e) { send(res, 500, { error: e.message }); }
 });

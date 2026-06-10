@@ -20,11 +20,24 @@ POST /commit { participants, rules, model }
 POST /reveal { sessionId }        (after roundTime)
   → fetch randomness(R), run the draw, → the 🟢 record (result + commitmentAnchor)
 
-GET /health → { ok, tsas, ahead }
+GET /health → { ok, tsas, ahead, ots }
 ```
 
 Verification of the §5.4 anchor is the spec's reference path: `openssl ts -verify`, and the token's
 `genTime` must be `< timeOfRound(R)`.
+
+## Anchor strength
+
+- **×2 RFC-3161 TSAs (default: FreeTSA + DigiCert).** The commitment is timestamped at *two
+  independent* authorities in different jurisdictions; stamping is fault-tolerant (the draw needs
+  only one token, keeps every token that answers), and the §5.4 gate requires *even the latest*
+  token's `genTime` to predate R. One TSA going down or colluding does not break the evidence.
+- **OpenTimestamps — free second anchor (best-effort).** At commit, `commitmentHash` is also
+  submitted to the OTS calendars; the returned proof is *pending* and matures into a Bitcoin-block
+  trail-immutability anchor in ~hours. It **never blocks** the RFC-3161 green path: if the OTS lib or
+  calendars are unavailable the draw is still 🟢 on the TSA tokens alone (`/health` → `ots:false`).
+- **Persistent pending state.** Commit→reveal state is written to disk (`UVS_STATE_DIR`), so a process
+  restart inside the window doesn't drop the session; `serverSeed` stays server-side until reveal.
 
 ## Deploy on Render
 
@@ -42,16 +55,17 @@ The Docker base installs `openssl` (with `ts`), which the native runtime may lac
 | Var | Default | Meaning |
 |---|---|---|
 | `PORT` | (Render-injected) | listen port |
-| `UVS_ROUND_AHEAD` | `9` | seconds until the committed future round R |
+| `UVS_ROUND_AHEAD` | `30` | seconds until the committed future round R (headroom so all TSA stamps land before R) |
 | `UVS_OPENSSL` | `openssl` | openssl binary path |
-| `UVS_TSA_LOCAL` | — | **dev only:** a local TSA dir (see `paddla-sdk/_3a_test.js`) instead of FreeTSA |
+| `UVS_STATE_DIR` | `os.tmpdir()/uvs3a-pending` | where pending commit→reveal sessions are persisted |
+| `UVS_TSA_LOCAL` | — | **dev only:** a local TSA dir (see `paddla-sdk/_3a_test.js`) instead of the public TSAs |
 
-Production TSAs are configured in `3a-server.js` (`TSAS`). Default: FreeTSA. For full §5.4 strength,
-add a **second TSA in another jurisdiction** (×2) so backdating-by-collusion is implausible.
+Production TSAs are configured in `3a-server.js` (`TSAS`). Default: **FreeTSA + DigiCert** (×2). Add
+more jurisdictions there for additional strength.
 
 ## Notes
 
 - **Free plan spins down** after inactivity → first request cold-starts (~30–60 s). Fine for a demo.
-- In-memory pending state: a restart between `/commit` and `/reveal` loses that session (use storage
-  for production load).
+- Pending state is disk-persisted, so it survives a process restart *within the same container*; a
+  full redeploy still starts clean (acceptable — the commit→reveal window is ~30 s).
 - The static client lives at `uvs.uncloned.work/3A` and activates automatically once this is up.
