@@ -121,7 +121,7 @@ async function doReveal(sessionId){
   try {
     const r = await fetch(BACKEND + '/reveal', { method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({ sessionId }) });
-    dr = await r.json(); if (!r.ok) throw new Error(dr.error||'reveal failed');
+    dr = await r.json(); if (!r.ok || dr.ok === false) throw new Error(dr.error||'reveal failed');
   } catch(e){ msg('Reveal failed: '+e.message+' — try Run again.', 'err'); return; }
 
   $('r_tier').innerHTML = dr.tier === 'green' ? '<span class="ok">🟢 green (outcome-bound + §5.4 anchor)</span>'

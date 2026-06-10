@@ -26,6 +26,8 @@ const { createHost } = require('./uvs-host.js');
 const rfc = require('./uvs-anchor-rfc3161.js');
 
 const sha256 = (s) => crypto.createHash('sha256').update(s).digest('hex');
+// drand randomness = SHA-256(signature BYTES); the v2 API returns {round,signature} only.
+const hashBytes = (hex) => crypto.createHash('sha256').update(Buffer.from(hex, 'hex')).digest('hex');
 const OPENSSL = process.env.UVS_OPENSSL || 'openssl';
 const AHEAD = parseInt(process.env.UVS_ROUND_AHEAD || '9', 10);   // seconds until R
 const TSAS = process.env.UVS_TSA_LOCAL
@@ -61,7 +63,7 @@ async function reveal(req, res) {
   if (!s) return send(res, 404, { error: 'unknown session' });
   if (drand.timeOfRound(s.fr.round) > Math.floor(Date.now() / 1000)) return send(res, 425, { error: 'round not published yet', round: s.fr.round, roundTime: s.fr.time });
   let r;
-  try { r = await drand.fetchRound(s.fr.round, { fetch: globalThis.fetch }); }
+  try { r = await drand.fetchRound(s.fr.round, { fetch: globalThis.fetch, hashBytes }); }
   catch (e) { return send(res, 502, { error: 'drand fetch failed: ' + e.message }); }
   const token = s.anchor.tokens[0];
   const dr = await host.draw('lottery', {
