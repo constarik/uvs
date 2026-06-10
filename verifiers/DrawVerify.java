@@ -24,6 +24,12 @@ public class DrawVerify {
     static String combined(String server, String rand) throws Exception { return sha256(server + ":" + rand); }
     static String score(String c, String id) throws Exception { return sha256(c + ":" + id); }
 
+    // uvLs §3.1: participant ids MUST be unique — a duplicate breaks the total order. Reject.
+    static void requireUnique(String[] parts) {
+        if (new java.util.HashSet<>(java.util.Arrays.asList(parts)).size() != parts.length)
+            throw new IllegalArgumentException("INVALID: duplicate participant ids - record rejected (uvLs 3.1)");
+    }
+
     public static void main(String[] args) throws Exception {
         String serverSeed = "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8091a2b3c4d5e6f70811223344556";
         String randomness = "e8d0543d60b639cf02775d16d8bc66f281b7bcbdf59706f29a1684889f8b9548";
@@ -31,6 +37,7 @@ public class DrawVerify {
         String[] parts = new String[M];
         for (int i = 0; i < M; i++) parts[i] = String.format("TICKET-%04d", i + 1);
 
+        requireUnique(parts);
         String c = combined(serverSeed, randomness);
         String[][] ranked = new String[M][2];
         for (int i = 0; i < M; i++) ranked[i] = new String[]{ score(c, parts[i]), parts[i] };
@@ -42,5 +49,11 @@ public class DrawVerify {
         System.out.println("combinedSeed = SHA-256(serverSeed:drandRandomness) = " + c);
         System.out.println(N + " prize(s) among " + M + " participants:");
         for (int i = 0; i < N; i++) System.out.println("  #" + (i + 1) + " " + ranked[i][1] + " -> SEAT");
+
+        // negative vector (uvLs §3.1): the same list with TICKET-0007 repeated MUST be rejected
+        String[] dup = java.util.Arrays.copyOf(parts, M + 1);
+        dup[M] = "TICKET-0007";
+        try { requireUnique(dup); System.out.println("FAIL: duplicate-ids not rejected"); }
+        catch (IllegalArgumentException ex) { System.out.println("negative vector duplicate-ids: correctly rejected"); }
     }
 }

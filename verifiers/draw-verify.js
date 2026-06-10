@@ -24,6 +24,14 @@ const sha256 = (s) => crypto.createHash('sha256').update(s, 'utf8').digest('hex'
 function combinedSeed(serverSeed, drandRandomness) { return sha256(serverSeed + ':' + drandRandomness); }
 function scoreOf(combined, id) { return sha256(combined + ':' + id); }
 
+// participant ids MUST be unique (uvLs §3.1): with a duplicate the id tie-break no longer
+// yields a total order and two entries collide on the same score. Reject, don't rank.
+// (ids are assumed NFC-normalized by the producer, per §3.1.)
+function requireUnique(participants) {
+  if (new Set(participants).size !== participants.length)
+    throw new Error('INVALID: duplicate participant ids — record rejected (uvLs §3.1)');
+}
+
 // deterministic order: highest score first; ties broken by id ascending
 function cmp(a, b) {
   if (a.score > b.score) return -1;
@@ -32,6 +40,7 @@ function cmp(a, b) {
 }
 
 function permute(participants, combined) {
+  requireUnique(participants);
   return participants.map((id) => ({ id, score: scoreOf(combined, id) })).sort(cmp);
 }
 
@@ -42,6 +51,7 @@ function allocate(participants, combined, prizes) {
 
 // single lookup — O(M) hashing, no sort
 function lookup(participants, combined, id, prizes) {
+  requireUnique(participants);
   const me = scoreOf(combined, id);
   let higher = 0, present = false;
   for (const a of participants) {
@@ -68,6 +78,7 @@ if (require.main === module) {
   const file = process.argv[2], id = process.argv[3];
   if (!file) { console.error('usage: node draw-verify.js <record.json> [id]'); process.exit(2); }
   const rec = JSON.parse(fs.readFileSync(file, 'utf8'));
+  try { requireUnique(rec.participants); } catch (e) { console.error(e.message); process.exit(1); }
   const combined = combinedSeed(rec.serverSeed, rec.drand.randomness);
   const prizes = poolOf(rec);
   console.log('combinedSeed = SHA-256(serverSeed:drandRandomness) =', combined);

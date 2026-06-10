@@ -18,7 +18,13 @@
 #include <vector>
 #include <utility>
 #include <algorithm>
+#include <set>
 using namespace std;
+
+// uvLs §3.1: participant ids MUST be unique — a duplicate breaks the total order.
+bool isUnique(const vector<string>& parts) {
+  return set<string>(parts.begin(), parts.end()).size() == parts.size();
+}
 
 static const uint32_t K[64] = {
   0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,
@@ -73,6 +79,8 @@ int main() {
   vector<string> parts(M);
   for (int i = 0; i < M; i++) { char b[16]; snprintf(b, sizeof(b), "TICKET-%04d", i+1); parts[i] = b; }
 
+  if (!isUnique(parts)) { printf("INVALID: duplicate participant ids - record rejected (uvLs 3.1)\n"); return 1; }
+
   string c = sha256_hex(serverSeed + ":" + randomness);
   vector<pair<string,string>> ranked;
   for (auto& id : parts) ranked.push_back({ sha256_hex(c + ":" + id), id });
@@ -84,5 +92,9 @@ int main() {
   printf("combinedSeed = SHA-256(serverSeed:drandRandomness) = %s\n", c.c_str());
   printf("%d prize(s) among %d participants:\n", N, M);
   for (int i = 0; i < N; i++) printf("  #%d %s -> SEAT\n", i+1, ranked[i].second.c_str());
+
+  // negative vector (uvLs §3.1): the same list with TICKET-0007 repeated MUST be rejected
+  vector<string> dup = parts; dup.push_back("TICKET-0007");
+  printf("negative vector duplicate-ids: %s\n", isUnique(dup) ? "FAIL not rejected" : "correctly rejected");
   return 0;
 }

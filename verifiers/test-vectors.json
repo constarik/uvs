@@ -77,5 +77,11 @@
       "won": false,
       "prize": null
     }
-  ]
+  ],
+  "negative": {
+    "duplicate-ids": {
+      "description": "The canonical record's participants with 'TICKET-0007' appended a second time (21 entries, one duplicate).",
+      "expected": "REJECTED - a conforming verifier MUST refuse to rank this record (uvLs 3.1)."
+    }
+  }
 }
