@@ -7,6 +7,6 @@ COPY . .
 # fail on a dependency. OpenTimestamps (the optional FREE SECOND anchor) is OFF by default; to enable
 # it, add a `RUN npm install --omit=dev --no-audit --no-fund || true` line below and redeploy. Without
 # it the server still issues genuine 🟢 draws on the ×2 RFC-3161 tokens alone.
-ENV UVS_ROUND_AHEAD=30
+ENV UVS_ROUND_AHEAD=10
 # Render injects $PORT; the server reads process.env.PORT.
 CMD ["node", "3a-server.js"]

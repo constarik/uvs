@@ -101,15 +101,18 @@ async function stamp(hashHex, tsas, opts) {
   opts = opts || {};
   const openssl = opts.openssl || 'openssl';
   const tsq = buildRequest(hashHex, openssl);
-  const tokens = [], errors = [];
-  for (const t of tsas) {
+  // Stamp every TSA CONCURRENTLY so total latency ≈ the slowest single TSA, not the sum —
+  // this keeps every genTime tight and lets a short commit→R window stay reliable.
+  const results = await Promise.all(tsas.map(async (t) => {
     try {
       const tsr = t.local ? localReply(tsq, t.local, openssl) : await postToTSA(tsq, t.url, opts.timeoutMs);
       const genTime = _genTime(tsr, openssl);
       if (genTime == null) throw new Error('token has no parseable genTime');
-      tokens.push({ tsa: t.name, proof: tsr.toString('base64'), genTime });
-    } catch (e) { errors.push({ tsa: t.name, error: e.message }); }
-  }
+      return { ok: true, token: { tsa: t.name, proof: tsr.toString('base64'), genTime } };
+    } catch (e) { return { ok: false, error: { tsa: t.name, error: e.message } }; }
+  }));
+  const tokens = results.filter(r => r.ok).map(r => r.token);
+  const errors = results.filter(r => !r.ok).map(r => r.error);
   if (!tokens.length) throw new Error('all TSAs failed: ' + errors.map(e => e.tsa + ':' + e.error).join('; '));
   return { commitmentHash: hashHex, kind: 'rfc3161', tokens, errors };
 }

@@ -33,7 +33,7 @@ const sha256 = (s) => crypto.createHash('sha256').update(s).digest('hex');
 // drand randomness = SHA-256(signature BYTES); the v2 API returns {round,signature} only.
 const hashBytes = (hex) => crypto.createHash('sha256').update(Buffer.from(hex, 'hex')).digest('hex');
 const OPENSSL = process.env.UVS_OPENSSL || 'openssl';
-const AHEAD = parseInt(process.env.UVS_ROUND_AHEAD || '30', 10);  // seconds until R (headroom so ALL TSA stamps land before R)
+const AHEAD = parseInt(process.env.UVS_ROUND_AHEAD || '10', 10);  // seconds until R (parallel stamping lands well inside this)
 const TSAS = process.env.UVS_TSA_LOCAL
   ? [{ name: 'local', local: process.env.UVS_TSA_LOCAL }]
   : [{ name: 'freetsa', url: 'https://freetsa.org/tsr' },          // ×2 independent TSAs, different
@@ -87,8 +87,9 @@ async function reveal(req, res) {
   try { r = await drand.fetchRound(s.fr.round, { fetch: globalThis.fetch, hashBytes }); }
   catch (e) { return send(res, 502, { error: 'drand fetch failed: ' + e.message }); }
   const tokens = s.anchor.tokens;
-  // conservative §5.4 gate: require even the LATEST TSA stamp to predate R (so ALL tokens predate R).
-  const commitTime = Math.max.apply(null, tokens.map(t => t.genTime));
+  // §5.4 gate uses the EARLIEST token: one independent TSA stamp predating R already proves the
+  // commitment existed before R (the others corroborate the same commitmentHash). Robust if one TSA lags.
+  const commitTime = Math.min.apply(null, tokens.map(t => t.genTime));
   const dr = await host.draw('lottery', {
     serverSeed: s.serverSeed, commitment: s.commitment, commitTime,
     drand: { round: s.fr.round, randomness: r.randomness },

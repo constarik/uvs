@@ -12,4 +12,4 @@ services:
     autoDeploy: true
     envVars:
       - key: UVS_ROUND_AHEAD
-        value: "30"
+        value: "10"

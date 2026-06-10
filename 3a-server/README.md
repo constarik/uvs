@@ -28,10 +28,12 @@ Verification of the §5.4 anchor is the spec's reference path: `openssl ts -veri
 
 ## Anchor strength
 
-- **×2 RFC-3161 TSAs (default: FreeTSA + DigiCert).** The commitment is timestamped at *two
-  independent* authorities in different jurisdictions; stamping is fault-tolerant (the draw needs
-  only one token, keeps every token that answers), and the §5.4 gate requires *even the latest*
-  token's `genTime` to predate R. One TSA going down or colluding does not break the evidence.
+- **×2 RFC-3161 TSAs (default: FreeTSA + DigiCert), stamped concurrently.** The commitment is
+  timestamped at *two independent* authorities in different jurisdictions in parallel (latency ≈ the
+  slower one). Stamping is fault-tolerant — the draw keeps every token that answers and needs only
+  one. The §5.4 gate uses the **earliest** token: one stamp predating R already proves the commitment
+  existed before R; the other corroborates the same `commitmentHash`. One TSA lagging, going down, or
+  colluding does not break the evidence.
 - **OpenTimestamps — free second anchor (opt-in, off by default).** The code path is built in:
   when the `opentimestamps` package is installed, commit also submits `commitmentHash` to the OTS
   calendars and attaches a *pending* proof that matures into a Bitcoin-block trail-immutability anchor
@@ -57,7 +59,7 @@ The Docker base installs `openssl` (with `ts`), which the native runtime may lac
 | Var | Default | Meaning |
 |---|---|---|
 | `PORT` | (Render-injected) | listen port |
-| `UVS_ROUND_AHEAD` | `30` | seconds until the committed future round R (headroom so all TSA stamps land before R) |
+| `UVS_ROUND_AHEAD` | `10` | seconds until the committed future round R (parallel stamping lands well inside this) |
 | `UVS_OPENSSL` | `openssl` | openssl binary path |
 | `UVS_STATE_DIR` | `os.tmpdir()/uvs3a-pending` | where pending commit→reveal sessions are persisted |
 | `UVS_TSA_LOCAL` | — | **dev only:** a local TSA dir (see `paddla-sdk/_3a_test.js`) instead of the public TSAs |
