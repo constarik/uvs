@@ -1,0 +1,15 @@
+# Render Blueprint for the UVS 3A anchored-draw backend (the only deployable service in this repo;
+# everything else here is GitHub Pages static). One-click: Render → New → Blueprint → connect this repo → Apply.
+services:
+  - type: web
+    name: uvs-3a
+    runtime: docker
+    rootDir: 3a-server
+    dockerfilePath: ./Dockerfile
+    plan: free
+    region: frankfurt
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: UVS_ROUND_AHEAD
+        value: "9"

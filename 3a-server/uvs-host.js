@@ -1,0 +1,240 @@
+/* ============================================================================
+ * UVS Host — composable backend. NO privileged core.
+ *
+ * The ONLY fixed point is the deterministic engine + adapter contract.
+ * Everything else is an OPTIONAL module the operator plugs in (or omits):
+ *   seed     : { issue() -> uint32, derive(regSeed, gameSeed) -> {serverSeed} }
+ *              the commit-reveal authority (a.k.a. "the registrar"). OPTIONAL.
+ *   storage  : { put(id,rec), get(id), list(limit) }   OPTIONAL (default: memory)
+ *   anchor   : { anchor(record) -> proof }             OPTIONAL (drand/chain).
+ *
+ * Games are PLUGINS of two profiles:
+ *   batch (G=ALL): { name, profile:'batch', adapter:{init,step,isFinished,result} }
+ *   sync  (G=1):   { name, profile:'sync', mount(app, wss, services) }
+ *
+ * Compose:  createHost({sha256, seed?, storage?, anchor?}).use(paddla).use(noisore)
+ * The trust TIER is DERIVED from which modules were actually present — not claimed.
+ * ========================================================================== */
+'use strict';
+
+const UVSCore = require('./uvs-core.js');
+const crypto = require('crypto');
+
+// ---- optional module: in-memory storage (dev/tests). Swap for Firestore etc. ----
+function memoryStorage() {
+  const m = new Map();
+  return {
+    async put(id, rec) { m.set(id, rec); },
+    async get(id) { return m.has(id) ? m.get(id) : null; },
+    async list(limit) {
+      return Array.from(m.values()).sort((a, b) => (b.ts || 0) - (a.ts || 0)).slice(0, limit || 20);
+    }
+  };
+}
+
+// ---- trust tier DERIVED from facts, never claimed (TLS self-signed analogy). ----
+// Three anchor strengths (uvs.md §10.2): notary < trail-immutability < outcome-binding.
+function deriveTier(f) {
+  f = f || {};
+  // 🟢: a valid neutral-registry signature, OR a trail-immutability inclusion proof, OR
+  //     outcome-binding WHOSE commitment-priority is itself proven (uvs §10, uvLs §5.4).
+  //     A future drand round alone is NOT green — without proof the commitment preceded it,
+  //     the operator could backdate the commitment and grind (uvs §12.2 "commitment backdating").
+  if (f.neutralSig) return 'green';
+  if (f.trailImmutable) return 'green';
+  if (f.outcomeBound && f.commitmentAnchored) return 'green';
+  // 🟡: an anchor exists (notary, self-anchored, seed authority, or outcome-binding without a
+  //     proven commitment) but none of the 🟢 conditions hold.
+  if (f.anchored || f.outcomeBound || f.seedAuthority || f.neutralHost) return 'amber';
+  return 'red';                                                          // self/client seed, unanchored
+}
+
+function createHost(cfg) {
+  cfg = cfg || {};
+  const sha256 = cfg.sha256;                       // (str)->hex  (needed for verify/trail ids)
+  const versions = cfg.versions || [1];
+  const storage = cfg.storage || memoryStorage();  // optional module
+  const seed = cfg.seed || null;                   // optional: registrar / commit-reveal authority
+  const anchor = cfg.anchor || null;               // optional: drand/chain anchor
+  const neutralHost = !!cfg.neutralHost;           // operator-declared: neutral registry vs self-host
+  const defaultGame = cfg.defaultGame || null;     // back-compat: assume this game when a client omits `game`
+  const trailPath = cfg.trailPath || '/trail';
+  const sessionTtlMs = cfg.sessionTtlMs || 10 * 60 * 1000;
+  const games = new Map();                          // name -> plugin
+  const sessions = new Map();
+  function gc() { const now = Date.now(); for (const [k, v] of sessions) if (now - v.created > sessionTtlMs) sessions.delete(k); }
+
+  const host = {
+    storage, supportedVersions: versions,
+
+    // Register a game plugin (batch adapter or sync mount). Chainable.
+    use(plugin) {
+      if (!plugin || !plugin.name) throw new Error('plugin needs a name');
+      const profile = plugin.profile || 'batch';
+      if (profile === 'batch' && !plugin.adapter) throw new Error('batch plugin "' + plugin.name + '" needs an adapter');
+      if (profile === 'sync' && typeof plugin.mount !== 'function') throw new Error('sync plugin "' + plugin.name + '" needs mount()');
+      if (profile === 'draw' && !plugin.draw) throw new Error('draw plugin "' + plugin.name + '" needs a draw module (uvLottery)');
+      games.set(plugin.name, Object.assign({ profile }, plugin));
+      return host;
+    },
+    games() { return Array.from(games.values()).map(g => ({ name: g.name, profile: g.profile })); },
+
+    // POST /session/new  { game, gameSeed, versions }
+    newSession(game, body) {
+      gc();
+      const g = games.get(game);
+      if (!g) return { accepted: false, error: 'unknown game ' + game };
+      const negotiated = UVSCore.negotiateVersion(body.versions || [1], versions);
+      if (!negotiated) return { accepted: false, serverVersions: versions };
+      const sessionId = crypto.randomBytes(8).toString('hex');
+      const regSeed = seed ? (seed.issue() >>> 0) : null;   // seed module optional
+      sessions.set(sessionId, { game, regSeed, gameSeed: (body.gameSeed >>> 0), uvsVersion: negotiated, created: Date.now() });
+      return { accepted: true, negotiated, serverVersions: versions, sessionId, regSeed,
+               seedAuthority: !!seed, expiresIn: sessionTtlMs / 1000 };
+    },
+
+    // POST /verify/:game  { regSeed?, serverSeed?, gameSeed, inputLog, clientResult, params, mode }
+    async verify(game, body) {
+      const g = games.get(game);
+      if (!g) return { ok: false, error: 'unknown game ' + game };
+      if (g.profile !== 'batch') return { ok: false, error: 'verify is for batch games; ' + game + ' is ' + g.profile };
+      if (body.gameSeed == null || !Array.isArray(body.inputLog)) return { ok: false, error: 'missing fields' };
+
+      // Resolve serverSeed: neutral commit (seed module) OR client-claimed (lower trust).
+      let serverSeed, seedAuthority;
+      if (seed && body.regSeed != null) {
+        serverSeed = (await seed.derive(body.regSeed >>> 0, body.gameSeed >>> 0)).serverSeed; seedAuthority = true;
+      } else if (body.serverSeed) {
+        serverSeed = body.serverSeed; seedAuthority = false;
+      } else {
+        return { ok: false, error: 'no serverSeed: send regSeed (needs seed module) or serverSeed' };
+      }
+
+      const params = body.params || {};
+      let state = g.adapter.init(serverSeed, params), i = 0, guard = 0;
+      while (!g.adapter.isFinished(state) && guard < 1000000) {
+        const inp = body.inputLog[i]; g.adapter.step(state, inp ? inp.target : null); i++; guard++;
+      }
+      const serverResult = g.adapter.result(state);
+      const ok = JSON.stringify(serverResult) === JSON.stringify(body.clientResult);
+
+      let gameId = null, tier = null;
+      if (ok) {
+        const compressed = UVSCore.compressInputLog(body.inputLog);
+        const inputHash = sha256(UVSCore.canonicalJSON(compressed));
+        gameId = sha256(serverSeed + ':' + inputHash);
+        const record = {
+          gameId, game, branch: 'uvGame', uvsVersion: 3, protocol: 'UVS-3.0', granularity: 'ALL',
+          regSeed: body.regSeed != null ? (body.regSeed >>> 0) : null, gameSeed: body.gameSeed >>> 0,
+          serverSeed, commitment: sha256(serverSeed),
+          params, mode: body.mode || null, result: serverResult, ticks: i,
+          inputLen: body.inputLog.length, inputLog: compressed, ts: Date.now()
+        };
+        let anchorProof = null;
+        if (anchor) { try { anchorProof = await anchor.anchor(record); } catch (e) { anchorProof = null; } }
+        record.anchorProof = anchorProof;
+        record.tierFacts = { seedAuthority, anchored: !!anchorProof, neutralHost };
+        tier = deriveTier(record.tierFacts);
+        record.tier = tier;
+        await storage.put(gameId, record);
+      }
+      return { ok, serverResult, clientResult: body.clientResult, gameId, tier,
+               trailUrl: gameId ? trailPath + '/' + gameId : null };
+    },
+
+    // POST /draw/:name  { serverSeed, commitment?, commitTime?, drand:{round,randomness}, participants, rules, model }
+    // uvLottery (the "L" branch): one seeded permutation. Born at v3, no version negotiation.
+    async draw(name, body) {
+      const g = games.get(name);
+      if (!g) return { ok: false, error: 'unknown draw ' + name };
+      if (g.profile !== 'draw') return { ok: false, error: 'draw is for draw plugins; ' + name + ' is ' + g.profile };
+      if (!body.serverSeed || !body.drand || body.drand.randomness == null || !Array.isArray(body.participants))
+        return { ok: false, error: 'missing fields (serverSeed, drand.randomness, participants)' };
+      const D = g.draw;
+      const combinedSeed = D.combinedSeed(body.serverSeed, body.drand.randomness);
+      const prizes = D.poolOf(body.rules || {});
+      const result = D.allocate(body.participants, combinedSeed, prizes);
+      // tier DERIVED, not claimed: outcome-bound iff the drand round publishes AFTER the commit
+      // (future round = anti-grind). A past/concurrent round is only a notary -> amber.
+      const roundTime = body.drand.round != null ? D.timeOfRound(body.drand.round) : null;
+      const outcomeBound = roundTime != null && body.commitTime != null && roundTime > body.commitTime;
+      // a draw's trust derives from the drand binding (uvLs §8), not a seed authority:
+      // no round = red; past/concurrent = notary (amber); future round = outcome-bound, but 🟢 only
+      // with a §5.4 commitment anchor proving the commitment preceded R — otherwise 🟡 (backdating risk).
+      const commitmentAnchored = !!(body.commitmentAnchor && body.commitmentAnchor.proof);
+      const facts = { anchored: body.drand.round != null, outcomeBound, commitmentAnchored, neutralHost };
+      const tier = deriveTier(facts);
+      const drawId = sha256(body.serverSeed + ':' + combinedSeed + ':' + sha256(UVSCore.canonicalJSON(body.participants)));
+      const record = {
+        gameId: drawId, branch: 'uvLottery', uvsVersion: 3, schema: 'verifiable-allocation/v1',
+        protocol: 'UVS-3.0', game: name, model: body.model || null,
+        serverSeed: body.serverSeed, commitment: body.commitment || sha256(body.serverSeed),
+        drand: {
+          beacon: D.QUICKNET.beacon, chainHash: D.QUICKNET.chainHash, round: body.drand.round,
+          randomness: body.drand.randomness, roundTime,
+          verifyUrl: body.drand.round != null ? 'https://api.drand.sh/' + D.QUICKNET.chainHash + '/public/' + body.drand.round : null
+        },
+        combinedSeed, participants: body.participants, rules: body.rules || {}, result,
+        commitmentAnchor: body.commitmentAnchor || null,   // §5.4 evidence; required for 🟢
+        tierFacts: facts, tier, ts: Date.now()
+      };
+      await storage.put(drawId, record);
+      return { ok: true, drawId, combinedSeed, result, tier, trailUrl: trailPath + '/' + drawId };
+    },
+
+    // POST /draw/:name/verify — recompute a draw record from scratch and compare the order
+    async verifyDraw(name, record) {
+      const g = games.get(name);
+      if (!g || g.profile !== 'draw') return { ok: false, error: 'unknown draw ' + name };
+      const D = g.draw;
+      const participants = Array.isArray(record && record.participants) ? record.participants
+        : (record && record.rules && Array.isArray(record.rules.participants) ? record.rules.participants : null);
+      if (!record || !record.serverSeed || !record.drand || participants == null)
+        return { ok: false, error: 'record needs serverSeed, drand.randomness, participants' };
+      const combinedSeed = D.combinedSeed(record.serverSeed, record.drand.randomness);
+      const prizes = D.poolOf(record.rules || {});
+      const result = D.allocate(participants, combinedSeed, prizes);
+      const norm = (r) => JSON.stringify((r || []).map(x => [x.rank, x.id, x.prize]));
+      const ok = combinedSeed === record.combinedSeed && norm(result) === norm(record.result);
+      return { ok, combinedSeed, result };
+    },
+
+    getTrail(id) { return storage.get(id); },
+    listTrail(limit) { return storage.list(limit); },
+
+    // Wire the standard routes into an Express app. wss (optional) is passed to sync plugins.
+    mountExpress(app, wss) {
+      // `defaultGame` keeps legacy clients working: they hit /session/new and
+      // /verify/<game> without a `game` body field. /verify/:game already matches
+      // the legacy /verify/paddla path, so no route is broken on deploy.
+      app.post('/session/new', (req, res) => res.json(host.newSession(req.body.game || defaultGame, req.body)));
+      app.post('/verify/:game', async (req, res) => {
+        try { res.json(await host.verify(req.params.game, req.body)); }
+        catch (e) { res.status(500).json({ error: e.message }); }
+      });
+      // uvLottery (draw) routes — same host, different path (one server, /verify + /draw).
+      app.post('/draw/:name', async (req, res) => {
+        try { res.json(await host.draw(req.params.name, req.body)); }
+        catch (e) { res.status(500).json({ error: e.message }); }
+      });
+      app.post('/draw/:name/verify', async (req, res) => {
+        try { res.json(await host.verifyDraw(req.params.name, req.body.record || req.body)); }
+        catch (e) { res.status(500).json({ error: e.message }); }
+      });
+      app.get(trailPath, async (req, res) => {
+        const items = await host.listTrail(Math.min(parseInt(req.query.limit) || 20, 100));
+        res.json({ count: items.length, items: items.map(x => ({ gameId: x.gameId, branch: x.branch || 'uvGame', game: x.game, result: x.result, tier: x.tier, ts: x.ts })) });
+      });
+      app.get(trailPath + '/:id', async (req, res) => {
+        const r = await host.getTrail(req.params.id); r ? res.json(r) : res.status(404).json({ error: 'not found' });
+      });
+      // sync plugins (e.g. NOISORE) mount their own realtime endpoints, using host services.
+      const services = { seed, storage, sha256, anchor, deriveTier, core: UVSCore, sessions };
+      for (const g of games.values()) if (g.profile === 'sync') g.mount(app, wss, services);
+      return app;
+    }
+  };
+  return host;
+}
+
+module.exports = { createHost, memoryStorage, deriveTier };

@@ -1,0 +1,13 @@
+{
+  "name": "uvs-3a-server",
+  "version": "1.0.0",
+  "description": "UVS 3A — standalone anchored-draw server (uvLottery, RFC 3161 §5.4 commitment anchor). Genuine 🟢, separate contour from production.",
+  "private": true,
+  "main": "3a-server.js",
+  "scripts": {
+    "start": "node 3a-server.js"
+  },
+  "engines": { "node": ">=18" },
+  "license": "MIT",
+  "repository": "https://github.com/constarik/uvs"
+}
