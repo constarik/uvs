@@ -70,7 +70,13 @@ allocation   = order[i] receives prizes[i]                 // null beyond the po
 
 All hash inputs are UTF-8 byte strings joined by the literal ASCII colon `":"`. All hashes are SHA-256, lowercase hex. Sorting is by the hex string compared as a value (equivalently, by the 256-bit big-endian integer); the tie-break on `id` makes the order total and deterministic.
 
-### 3.1 Single-participant lookup
+### 3.1 Participant ids (uniqueness, encoding)
+
+Participant ids **MUST** be unique within a draw. A record containing duplicate ids is **invalid**, and a verifier **MUST** reject it rather than rank it — with duplicates, the `id` tie-break no longer yields a total order, and two entries would collide on the same score.
+
+Ids are arbitrary non-empty UTF-8 strings, **NFC-normalized** (core §5) before hashing and before the tie-break comparison; the tie-break compares ids by Unicode code point. Note that the `":"`-joined preimages above are unambiguous by construction: `serverSeed`, `drandRandomness`, and `combinedSeed` are fixed-length lowercase hex, so the variable-length `id` always occupies an unambiguous final position. Ids **MAY** therefore contain `":"` without creating collisions.
+
+### 3.2 Single-participant lookup
 
 A participant's result **MUST** be computable without ranking everyone, in O(M) hashing and no sort:
 
@@ -105,6 +111,14 @@ endpoints:  https://api.drand.sh/<chainHash>/public/<round>
 
 `randomness` **MUST** be taken as the SHA-256 of the round's signature bytes (the beacon's own `randomness` field), and any verifier **MUST** be able to re-fetch the named round and confirm it.
 
+### 4.2 Beacon failure and chain migration
+
+A commitment names a specific `chainHash` and a specific round `R`. Relays are interchangeable; the chain is not:
+
+- **Relay outage.** Implementations **SHOULD** query multiple relays (api.drand.sh, drand.cloudflare.com, self-hosted mirrors). The round's BLS signature verifies against the chain's published public key regardless of which relay served it, so relay choice carries no trust.
+- **Chain halt or retirement.** If the named chain stops publishing before round `R` exists, the draw **MUST NOT** silently substitute another entropy source — that would reopen grinding. The operator **MUST** declare the original record **VOID-BY-BEACON** and publish a *fresh* commitment (new `serverSeed`, new future round on the successor chain, same committed participants and pool), explicitly referencing the voided record. Verifiers **MUST** treat a record whose named round never published as void, not as failed or substitutable.
+- **Pinning.** The `chainHash` (and chain public key, if recorded) in the commitment is authoritative; a record verified against any other chain does not verify.
+
 ---
 
 ## 5. Commitment & Anti-Grinding
@@ -119,16 +133,32 @@ If the entropy used by a draw is already **known** when the operator chooses its
 
 To make a draw un-grindable, an implementation **MUST**:
 
-1. Publish, **before** the draw, the participant list, the prize pool, and `commitment = SHA-256(serverSeed)`.
+1. Publish, **before** the draw, the participant list, the prize pool, `commitment = SHA-256(serverSeed)`, and the target round `R`.
 2. Commit to a **future** drand round `R` — one whose publication time is *after* the commitment. `R` does not yet exist, so it cannot be pre-selected.
-3. After round `R` publishes, fetch `drandRandomness = randomness(R)` and compute the result (§3).
-4. Reveal `serverSeed`; anyone checks `SHA-256(serverSeed) == commitment` and re-derives the winners.
+3. Anchor the commitment record's existence-before-`R` per §5.4.
+4. After round `R` publishes, fetch `drandRandomness = randomness(R)` and compute the result (§3).
+5. Reveal `serverSeed`; anyone checks `SHA-256(serverSeed) == commitment` and re-derives the winners.
 
 Because the outcome depends on `R`, which was unknown at commitment, neither the operator nor anyone else could have steered it. This is **outcome-binding** (the strongest anchor, core §10.2) and is the recommended, default mode for uvLottery.
 
 ### 5.3 Notary mode (weaker, permitted)
 
 An implementation **MAY** instead bind a *past or concurrent* round as a **notary** (a timestamp on a finished record). This proves *when* the draw was bound to the public timeline but does **not** prevent grinding. A notary-only draw **MUST NOT** be presented as outcome-bound, and is classified at most 🟡 (§8).
+
+### 5.4 Proving the commitment came first (MUST for 🟢)
+
+Outcome-binding rests entirely on the premise that the commitment existed **before** round `R` published. A commitment hosted only on the operator's own infrastructure proves nothing about *when* it appeared: a dishonest operator could wait for `randomness(R)`, grind a favorable `serverSeed`, and backdate the page. The future round defeats grinding only if the commitment's priority is itself provable.
+
+Define the **commitment record** as the Canonical JSON (core §5) of `{ participants, prizePool, commitment, chainHash, round R }`, and `commitmentHash = SHA-256(commitment record)`.
+
+For a draw to classify 🟢, `commitmentHash` **MUST** carry evidence of existence before `timeOfRound(R)` that does not depend on trusting the operator. Acceptable evidence — any one of:
+
+- **Append-only public medium.** Inclusion of `commitmentHash` in a public transparency log, a public blockchain transaction, or an OpenTimestamps proof, at a position whose time is verifiably before `timeOfRound(R)`.
+- **Neutral registry.** A signature over `commitmentHash` by a published neutral-registry key (core §10.1) together with a signed timestamp before `timeOfRound(R)`, where the registry's signing log is itself publicly auditable.
+
+In addition, the commitment record **SHOULD** embed `randomness(R_c)` of a recent **past** round `R_c < R`. This pins a *lower* bound — the record cannot predate `R_c`'s publication — and narrows the window `[timeOfRound(R_c), timeOfRound(R)]` inside which an auditor must place the anchor. The lower bound alone is **not** sufficient evidence: it proves the record is not too old, not that it is old enough.
+
+A draw whose commitment time rests solely on the operator's word **MUST NOT** be classified 🟢; it is at most 🟡, regardless of the future round named in it.
 
 ---
 
@@ -161,11 +191,17 @@ A uvLottery draw **SHOULD** publish a self-contained record sufficient for any t
     "combinedSeed": "<hex = SHA-256(serverSeed:randomness)>",
     "algorithm":    "rank(id)=SHA-256(combinedSeed:id), sort desc, deal pool onto order"
   },
+  "commitmentAnchor": {
+    "commitmentHash": "<hex = SHA-256(canonical commitment record)>",
+    "kind":  "transparency-log | blockchain | opentimestamps | neutral-registry",
+    "proof": "<inclusion proof / txid / ots / signature+timestamp>",
+    "lowerBoundRound": 29280000
+  },
   "result": [ { "rank": 1, "id": "TICKET-0002", "prize": "SEAT", "score": "<hex>" } ]
 }
 ```
 
-The header (`commitment`, `drand` round, `branch: "uvLottery"`) follows core §6.2; the record is the replayable recipe (core §6.1).
+The header (`commitment`, `drand` round, `branch: "uvLottery"`) follows core §6.2; the record is the replayable recipe (core §6.1). `commitmentAnchor` carries the §5.4 evidence and is **REQUIRED** for a record claiming 🟢 (`lowerBoundRound` is the optional `R_c`).
 
 > **Two version axes — don't conflate them.** The `verifiable-allocation/v1` tag versions the **record schema** (the JSON shape) and evolves independently of the standard: a `/v1` record is the current shape produced under uvLottery Standard **v3**. The standard version travels in the header as `uvsVersion: 3` (core §6.2), not in this field.
 
@@ -178,8 +214,8 @@ Per core §10, a draw's tier is **derived from evidence**, never claimed:
 | Tier | Condition |
 |------|-----------|
 | 🔴 **Unanchored** | Committed seed + reproducible recipe, but no public beacon binding. |
-| 🟡 **Notary** | drand round bound as a timestamp on a finished record (§5.3) — proves *when*, not unriggability. |
-| 🟢 **Outcome-bound** | Seed bound to a **future** drand round (§5.2) — the outcome could not be pre-selected. The recommended mode. |
+| 🟡 **Notary** | drand round bound as a timestamp on a finished record (§5.3) — proves *when*, not unriggability. Also: any draw naming a future round whose commitment-time evidence (§5.4) is missing or fails to verify. |
+| 🟢 **Outcome-bound** | Seed bound to a **future** drand round (§5.2) **and** the commitment's existence before that round proven per §5.4. The recommended mode. |
 
 Input honesty (that the participant list and pool were not themselves rigged) is **separate** from the tier and is addressed by the public pre-commitment of those inputs (§5.2, §11).
 
@@ -187,11 +223,12 @@ Input honesty (that the participant list and pool were not themselves rigged) is
 
 ## 9. Verification
 
-A draw is verified — with no privileged access and no trust in the operator — in three steps:
+A draw is verified — with no privileged access and no trust in the operator — in four steps:
 
-1. **Commitment** — confirm `SHA-256(serverSeed) == commitment` published before the draw.
-2. **Randomness** — fetch the named drand round from the public beacon; confirm its `randomness` matches the record and that the round published *after* the commitment (for 🟢).
-3. **Re-derivation** — run §3 over the committed `participants[]`; confirm the winners match what was announced.
+1. **Commitment** — confirm `SHA-256(serverSeed) == commitment`, and that the committed record (participants, pool, round `R`) hashes to the published `commitmentHash`.
+2. **Commitment time** — verify the §5.4 anchor: confirm `commitmentHash` is included in the named public medium (or carries a valid neutral-registry signature) at a time before `timeOfRound(R)`. The operator's own claimed timestamp is **not** evidence. Without this step the draw verifies at most 🟡.
+3. **Randomness** — fetch the named drand round from the public beacon; confirm its `randomness` matches the record.
+4. **Re-derivation** — confirm `participants[]` contains no duplicate ids (§3.1), run §3 over the committed list, and confirm the winners match what was announced.
 
 Four reference verifiers — **JavaScript, Python, Java, C++** — each using only the standard library, each producing byte-identical output, are published in [`verifiers/`](https://github.com/constarik/uvs/tree/master/verifiers) along with test vectors. A reviewer runs whichever they trust, or writes a fifth and checks it against the vectors. There is no "operator's version" of the result: there is one result, and anyone can compute it.
 
@@ -212,7 +249,7 @@ winners      = TICKET-0002 (rank 1), TICKET-0012 (2), TICKET-0001 (3),
                TICKET-0005 (4), TICKET-0006 (5)
 ```
 
-Every reference verifier, in every language, reproduces these exact winners. Any conforming implementation **MUST** reproduce this vector.
+Every reference verifier, in every language, reproduces these exact winners. Any conforming implementation **MUST** reproduce this vector. A conforming verifier **MUST** additionally reject the negative vector `duplicate-ids` (the same list with `TICKET-0007` repeated), per §3.1.
 
 ---
 
@@ -224,8 +261,9 @@ Beyond the shared core threats (`uvs.md` §12), uvLottery specifically prevents 
 
 - **Seed substitution** — commitment mismatch is detectable by anyone.
 - **Grinding the seed** — outcome-binding to a future drand round (§5.2) means the operator could not search for a favorable seed; the entropy did not exist at commit.
+- **Backdated commitment** — §5.4 requires operator-independent evidence that the commitment preceded round `R`; a fabricated "early" commitment fails the anchor check and demotes the draw to 🟡.
 - **Result falsification** — winners are re-derived from public inputs; an altered list no longer matches.
-- **Beacon substitution** — the named round is re-fetchable from the public beacon and must match.
+- **Beacon substitution** — the named round is re-fetchable from the public beacon and must match; chain substitution is excluded by the pinned `chainHash` (§4.2).
 - **Hidden bias / discrimination** — scoring is content-neutral (§6); every entry is ranked by the same public function.
 
 **Not prevented (out of crypto scope)**
@@ -247,7 +285,7 @@ UVS makes a small set of **specific, falsifiable claims**. Each is stated below 
 | 2 | **Faithful ranking.** Every entry's rank is the published function of its id. | Find a participant whose recomputed `rank` ≠ the announced rank. | `participants[]` + `combinedSeed` |
 | 3 | **Commitment integrity.** The revealed seed is the one committed before the draw. | Show `SHA-256(serverSeed)` ≠ the pre-published `commitment`. | `commitment` + revealed `serverSeed` |
 | 4 | **Beacon authenticity.** The randomness is the named drand round's. | Re-fetch the round from the public beacon; show its randomness ≠ the record's. | drand `round` number + public beacon |
-| 5 | **Un-grindability (🟢 draws).** The round published *after* the commit, so the seed could not be pre-picked. | Show `timeOfRound(round) ≤ commitTime` — the round already existed at commit. | `commitTime` + `genesis + (round−1)·3s` |
+| 5 | **Un-grindability (🟢 draws).** The round published *after* the commit, so the seed could not be pre-picked. | Show `timeOfRound(round) ≤ commitTime` — the round already existed at commit (commit time as **proven** by the §5.4 anchor, not as claimed by the operator). | §5.4 anchor evidence + `genesis + (round−1)·3s` |
 | 6 | **Cross-language identity.** All four reference verifiers agree byte-for-byte. | Get any two of JS / Python / Java / C++ to disagree on the same record. | the [verifiers](https://github.com/constarik/uvs/tree/master/verifiers) + a record |
 
 If any single row can be satisfied against a published draw, that draw is broken — provably, by anyone, permanently. That is the design intent: the standard is built to be refuted, and earns trust only by surviving the attempt.

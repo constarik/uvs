@@ -102,6 +102,8 @@ Determinism is the foundation on which every other guarantee rests: if a result 
 
 Implementations **MUST NOT** consume non-deterministic sources (`Math.random`, wall-clock time, locale, floating-point modes that vary by platform) inside the verifiable computation. Any non-deterministic value that appears in a record (e.g. a human-readable timestamp) **MUST** be inert metadata, excluded from every hash and from every input to the result.
 
+Because cross-platform determinism claims are most often broken by floating-point divergence, a branch whose engines may compute over floats **MUST** define a float discipline (quantization, fixed-point, or a correctly-rounded operation subset — see uvGs §3.5), and determinism **MUST** be demonstrated across more than one independent runtime before being claimed as cross-platform.
+
 ---
 
 ## 4. Single Engine
@@ -207,6 +209,8 @@ When a trail is notary-anchored, the record **SHOULD** carry:
 
 so any party can re-fetch the round and confirm the binding.
 
+Note the direction of proof: embedding `randomness(r)` of a **past** round proves the record was created *no earlier than* round `r` (the value was unpredictable before publication). It does **not** prove the record existed *before* any later moment — an upper bound on creation time requires the record's hash to appear in a medium the operator does not control (§10.2, strength 2).
+
 ---
 
 ## 10. Trust Tiers
@@ -219,7 +223,7 @@ A UVS result's trustworthiness **MUST** be **derived from the evidence present**
 |------|---------|
 | 🔴 **Unanchored** | A committed seed and a reproducible recipe exist, but there is no external anchor. The honesty of the *commit* rests on the operator alone. |
 | 🟡 **Anchored (self / notary)** | A valid external anchor exists (e.g. a drand notary on the trail, or a self-hosted commitment), but no neutral-registry signature and no immutability proof of the trail itself. |
-| 🟢 **Neutral / outcome-bound** | Either a valid signature by a published neutral registry key, **or** a trail-immutability inclusion proof, **or** the outcome is bound to randomness that did not exist at commit time (outcome-binding). |
+| 🟢 **Neutral / outcome-bound** | Either a valid signature by a published neutral registry key, **or** a trail-immutability inclusion proof, **or** the outcome is bound to randomness that did not exist at commit time (outcome-binding), with the commitment's prior existence proven per §10.2(3). |
 
 ### 10.2 Anchor strengths (presence ≠ 🟢)
 
@@ -227,7 +231,7 @@ An anchor being *present* does not by itself grant the top tier. There are three
 
 1. **Notary** — a finished record is bound to a public beacon round (a timestamp). Proves *when*, not *unriggability*.
 2. **Trail-immutability** — the record's hash and length are committed to a public append-only medium (beacon, transparency log, chain), so the trail cannot be silently rewritten.
-3. **Outcome-binding** — the outcome's seed derives from a beacon round that **did not exist at commit time**, so it could not have been pre-selected. This is the strongest anti-grinding guarantee.
+3. **Outcome-binding** — the outcome's seed derives from a beacon round that **did not exist at commit time**, so it could not have been pre-selected. This is the strongest anti-grinding guarantee — but it is only as strong as the proof that the commitment actually preceded the round. Outcome-binding therefore **MUST** be accompanied by operator-independent evidence that the commitment existed before the named round published (an append-only-medium inclusion or a neutral-registry timestamp; normative procedure in uvLs §5.4). A future-round reference whose commitment time rests on the operator's word classifies as a notary claim at best.
 
 A result is classified by the *strongest* anchor it actually carries, verified — never by the mere mention of one.
 
@@ -265,6 +269,7 @@ UVS does not make cheating impossible; it makes a lie **catchable** — by anyon
 ### 12.2 What the core does not guarantee
 
 - **Pre-commit collusion** — if an operator leaks a seed before commitment, downstream guarantees weaken. Branches mitigate this differently (uvGame via input-seeding or `clientSeed`; uvLottery via a future drand round).
+- **Commitment backdating** — a commitment whose publication time is attested only by the operator can be fabricated after the fact. Closing this requires the §10.2 evidence (append-only inclusion or neutral-registry timestamp); uvLottery makes it mandatory for 🟢 (uvLs §5.4).
 - **Input honesty** — UVS proves the published rules were followed on the published inputs. It does **not** prove the inputs themselves (participant list, prize pool, game parameters) were honest. Guarding the inputs requires a public pre-commitment of those inputs (the Audit Trail's job) and is branch-specific.
 - **Presentation** — UVS secures computation, not the UI shown to a user.
 - **Cryptographic breaks** — UVS inherits the security assumptions of the hash functions and beacons it uses.
@@ -274,7 +279,7 @@ UVS does not make cheating impossible; it makes a lie **catchable** — by anyon
 - The hash functions in use (SHA-256 / SHA-512) and any beacon (drand) are computationally secure.
 - The reference VM executes in an unmodified runtime.
 - Audit Trail storage is append-only and tamper-evident.
-- A commitment is published before the value it commits to is known.
+- A commitment is published before the value it commits to is known — and, for the strongest tier, that publication is itself provable (§10.2).
 
 ---
 

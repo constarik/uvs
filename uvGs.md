@@ -120,6 +120,33 @@ This has a critical property: **even if the player knows the seed, they cannot p
 - **Move with input-seeding:** the seed **MAY** be revealed before play (§3.3).
 - **Move without input-seeding:** standard commit-reveal applies.
 
+### 3.5 Floating point in the verifiable computation
+
+Bit-exact determinism (core §3) is most often broken not by RNG but by **floating-point divergence across runtimes** — fused multiply-add, transcendental library functions, and optimizer reassociation all vary by engine and platform. An engine whose verifiable computation touches floats **MUST** do at least one of:
+
+- **quantize** every float-derived value at the point it enters the verifiable state or a hash preimage (fixed decimal places, as PADDLA does with `toFixed(4)`, or fixed-point integers), so platform noise below the quantum cannot propagate; or
+- restrict itself to operations with IEEE 754-mandated correct rounding (`+ − × ÷ √`) and document that restriction; or
+- use integer/fixed-point arithmetic throughout.
+
+`Math.sin`-style library transcendentals **MUST NOT** feed unquantized results into verifiable state. Conformance to this section is demonstrated by the cross-platform audit requirement in §10.5.
+
+### 3.6 Session-level outcome-binding (RECOMMENDED profile)
+
+Outcome-binding (core §10.2, strength 3) is usually framed per-draw, where a multi-second wait for a future beacon round is acceptable. In an interactive game it is not — and it does not need to be paid per game. This profile binds the **session** instead:
+
+1. At session open, the server (or Registrar) publishes `commitment = SHA-256(sessionEntropy)` together with a target **future** drand round `R` — the next round whose publication time exceeds the commitment time (quicknet period 3 s ⇒ worst case a few seconds).
+2. The client fetches `randomness(R)` when it publishes — typically during session load or menu time, so the wait is hidden, not felt.
+3. The session seed is derived as `serverSeed = SHA-256( sessionEntropy + ":" + randomness(R) )` and enters the §3.2 chain unchanged (in Protected deployments it feeds the §5.1 derivation in place of the raw server entropy, with `clientSeed` retained).
+4. `sessionEntropy` is revealed at session close per §3.4; anyone confirms `SHA-256(sessionEntropy) == commitment` and that `R` published after the commitment.
+
+Every game in the session inherits the anchor: the operator could not have pre-selected `serverSeed`, because the entropy that completes it did not exist at commit time. Per-game freshness continues to come from `nonce`/tick and, in input-seeded games (§3.3), from the player's own future Moves.
+
+**Pipelining.** For back-to-back sessions — or per-game binding where a game wants it — the commitment for session N+1 **SHOULD** be issued while session N is live; its round has already published by the time the player continues. Zero perceived latency after the first session.
+
+**Tier effect.** A session bound this way carries outcome-binding and classifies 🟢, **provided** the commitment's existence before `R` is itself proven by operator-independent evidence (the uvLs §5.4 procedure, applied to the session commitment; a Registrar-signed timestamp qualifies only if the Registrar is a published *neutral* key, not the operator). Trail-immutability anchoring of the finished trail (core §10.2, strength 2) remains an alternative 🟢 path with no wait at all; the two **MAY** be combined.
+
+Use of this profile is **OPTIONAL**, **RECOMMENDED** wherever a one-time ~3-second session-open wait is acceptable, and **MUST** be declared in the session header (`sessionBinding: "outcome-bound"`, with the target round recorded in the core §9 anchor format).
+
 ---
 
 ## 4. Move Protocol — Batch (shipped)
@@ -156,6 +183,12 @@ combinedSeed = SHA-512( finalSeed + ":" + clientSeed + ":" + nonce )
 ```
 
 **Security property.** Extracting the client code without `regSeed` is **operationally difficult**: an attacker obtains a WASM *generator*, but without the Registrar-issued `regSeed` cannot predict which binary will execute in a given session. The strength of this property depends on (a) `regSeed` carrying sufficient entropy to make exhaustive precomputation impractical and (b) the generator producing binaries whose behavior across `regSeed` values is statistically indistinguishable. Formal entropy/diversity bounds are reserved for a later revision.
+
+**Classification (normative).** The Protected layer is **obfuscation engineering, not cryptography**. It raises the *cost* of extraction; it does not make extraction infeasible in the cryptographic sense, and no reduction to a hard problem is claimed. Consequently:
+
+- Protected **MUST NOT** be counted as evidence toward a trust tier (core §10). Tiers are earned by commitments, anchors, and signatures only; a Protected session with no anchor is still 🔴.
+- Marketing and conformance claims **MUST NOT** describe the WASM layer as a cryptographic guarantee, "unbreakable," or equivalent.
+- The fairness guarantees of uvGame (commit-reveal, determinism, replay) **MUST** hold even if the Protected layer is fully reverse-engineered. Protected defends the operator's IP; it defends nothing for the player, and the player's verification path must never route through trusting it.
 
 **Verification.** After play, the client or any third party rebuilds the WASM from `regSeed`, runs `compute(gameSeed)`, and confirms `finalSeed`. The Registrar can verify with a JS mirror, `runSpec(regSeed, gameSeed)`, without WASM.
 
@@ -250,7 +283,7 @@ The full normative text of the signing/ack/publication protocol is maintained in
 combinedSeed_t = SHA-512( serverSeed + ":" + bumperX.toFixed(4) + ":" + bumperY.toFixed(4) + ":" + t )
 ```
 
-Mapping to §3.2: the per-tick `clientSeed` component is the bumper position `"x.xxxx:y.yyyy"`, and the `nonce` is the tick counter `t`. The header `clientSeed: "uvs-paddla"` is a constant session label.
+Mapping to §3.2: the per-tick `clientSeed` component is the bumper position `"x.xxxx:y.yyyy"`, and the `nonce` is the tick counter `t`. The header `clientSeed: "uvs-paddla"` is a constant session label. The `.toFixed(4)` quantization is the §3.5 float discipline: bumper coordinates enter the verifiable computation only at fixed precision.
 
 **10.2 Seed derivation.** `serverSeed = runSpec(regSeed, gameSeed)` (uint32) zero-padded to 64 hex; the Registrar's JS mirror reproduces the WASM byte-identically (vector `regSeed=305419896, gameSeed=12345 → 0x4B956F81`).
 
@@ -258,9 +291,11 @@ Mapping to §3.2: the per-tick `clientSeed` component is the bumper position `"x
 
 **10.4 Self-contained verification.** Third-party verification runs entirely on the client / any page holding the engine, without trusting the Registrar: (1) rebuild WASM (or run `runSpec`) from `regSeed` and confirm `serverSeed`; (2) replay the engine over `inputLog` and confirm `totalWin`. The trail-replay page re-verifies any public game by link.
 
-**10.5 Determinism audit (passed).** 300 sessions · 454,716 ticks · 4 input policies → result *and full state* reproduced byte-identically, no module-level leakage. The per-tick fresh-PRNG design structurally precludes the running-stream desync class — no un-logged RNG consumption can drift a replay.
+**10.5 Determinism audit.** 300 sessions · 454,716 ticks · 4 input policies → result *and full state* reproduced byte-identically, no module-level leakage. The per-tick fresh-PRNG design structurally precludes the running-stream desync class — no un-logged RNG consumption can drift a replay.
 
-**10.6 Trust tier.** Live PADDLA binds the pre-play commit via the Registrar and notarizes the trail with a drand round (core §9) → tier 🟡. It is not outcome-bound (the seed does not derive from a future round), by deliberate design — the arcade favors instant play over the ~seconds wait outcome-binding would require.
+**Platform coverage (normative).** A "byte-identical" determinism claim **MUST** be backed by an audit executed on **at least two independent JS engines** (e.g. V8 and JavaScriptCore or SpiderMonkey) **and at least two operating systems**, with the runtime matrix published alongside the audit numbers. Single-runtime reproduction does not exercise the float-divergence class (§3.5) and **MUST NOT** be reported as cross-platform determinism. <!-- TODO(author): publish the PADDLA audit's actual runtime matrix (engines, versions, OSes) here; until then the 300-session figure above is a single-matrix claim. -->
+
+**10.6 Trust tier.** Live PADDLA binds the pre-play commit via the Registrar and notarizes the trail with a drand round (core §9) → tier 🟡. It is not outcome-bound (the seed does not derive from a future round), by deliberate design — the arcade favors instant play over the ~seconds wait per-game outcome-binding would require. The designated upgrade path is §3.6: one session-open binding (hidden in load time, pipelined thereafter) lifts every game in the session to 🟢 without touching the instant-play feel. Per §5.1, the Protected layer contributes nothing to this tier.
 
 ---
 
@@ -272,7 +307,7 @@ Beyond the shared core threats (`uvs.md` §12), uvGame specifically prevents:
 - **RNG manipulation** — keystream fully determined by `combinedSeed` via ChaCha20.
 - **Move falsification (Move Mode)** — every Move is recorded; replay detects any alteration.
 - **Engine substitution in production** — Registrar holds a certified copy; the operator's engine is irrelevant if the Registrar disagrees (Protected).
-- **IP theft** — per-session WASM makes extracted code without `regSeed` operationally difficult (Protected).
+- **IP theft (deterrence, not prevention)** — per-session WASM makes extracted code without `regSeed` operationally difficult (Protected, §5.1). This is obfuscation-grade: it raises cost, it is not a cryptographic guarantee.
 - **Multiplayer cheating / equivocation (Move Sync, planned)** — signed moves + acks + public trail.
 
 Not prevented: pre-commit collusion (unless input-seeded or future-anchored), UI substitution, unbalanced game design, payment-layer attacks, network-latency exploitation in Sync, cryptographic breaks.
