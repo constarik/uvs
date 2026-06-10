@@ -58,10 +58,12 @@
 <body>
 <div class="wrap">
   <div id="errbar"></div>
-  <header><h1>🎲 Run a draw</h1><span class="badge">UVS + drand 🟢</span></header>
+  <header><h1>🎲 Run a draw</h1><span class="badge" title="Outcome-bound to a future drand round, but the commitment's publication time is not yet independently attested (uvLs §5.4) — so this draw honestly classifies 🟡, not 🟢. RFC-3161 timestamping is coming; that lifts it to 🟢.">UVS + drand 🟡 outcome-bound</span></header>
   <p class="tag">Pick a model and run it. The randomness comes from a <b>drand</b> round that hasn't happened yet —
     so neither side can pre-pick it. When the round publishes (~seconds) the draw is sealed; the result is then
-    re-derivable by anyone, in any language.</p>
+    re-derivable by anyone, in any language. <b>Tier 🟡</b>, honestly: the proof that the commitment
+    <i>preceded</i> the round currently rests on this page's word (uvLs §5.4). Independent RFC-3161
+    timestamping ships next — that, not a claim, makes a draw 🟢.</p>
 
   <div class="modelbar">
     <label for="preset">Model</label>

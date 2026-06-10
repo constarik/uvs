@@ -227,7 +227,7 @@ Input honesty (that the participant list and pool were not themselves rigged) is
 A draw is verified — with no privileged access and no trust in the operator — in four steps:
 
 1. **Commitment** — confirm `SHA-256(serverSeed) == commitment`, and that the committed record (participants, pool, round `R`) hashes to the published `commitmentHash`.
-2. **Commitment time** — verify the §5.4 anchor: confirm `commitmentHash` is included in the named public medium (or carries a valid neutral-registry signature) at a time before `timeOfRound(R)`. The operator's own claimed timestamp is **not** evidence. Without this step the draw verifies at most 🟡.
+2. **Commitment time** — verify the §5.4 anchor: confirm `commitmentHash` is included in the named public medium, carries a valid RFC 3161 token with `genTime` before `timeOfRound(R)`, or carries a valid neutral-registry signature timestamped before `timeOfRound(R)`. The operator's own claimed timestamp is **not** evidence. Without this step the draw verifies at most 🟡.
 3. **Randomness** — fetch the named drand round from the public beacon; confirm its `randomness` matches the record.
 4. **Re-derivation** — confirm `participants[]` contains no duplicate ids (§3.1), run §3 over the committed list, and confirm the winners match what was announced.
 
