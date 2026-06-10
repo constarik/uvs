@@ -114,13 +114,37 @@ async function reveal(req, res) {
   }));
 }
 
+// POST /anchor-record { record } | { commitmentHash }
+// Notary anchor for a SETTLED record (e.g. a finished game). A game outcome is input-seeded — there is
+// no future drand round in it — so we DON'T claim outcome-binding. Instead we stamp the record's
+// commitmentHash at ×2 RFC-3161 (a neutral NOTARY: existence-at-time) and submit it to OpenTimestamps.
+// Honest tier today is 🟡 notary; the OTS proof matures to 🟢 trail-immutability once Bitcoin confirms.
+async function anchorRecord(req, res) {
+  const b = await body(req);
+  const commitmentHash = b.commitmentHash || sha256(UVSCore.canonicalJSON(b.record || b));
+  let notary, otsProof;
+  try {
+    const [a, o] = await Promise.all([
+      rfc.stamp(commitmentHash, TSAS, { openssl: OPENSSL }),
+      ots.stamp(commitmentHash, { timeoutMs: 12000 }).catch(e => ({ ok: false, error: e.message }))
+    ]);
+    notary = a; otsProof = (o && o.ok) ? o : null;
+  } catch (e) { return send(res, 502, { error: 'RFC-3161 notary stamping failed: ' + e.message }); }
+  send(res, 200, {
+    commitmentHash, notary, ots: otsProof, tier: 'notary',
+    note: 'RFC-3161 = neutral notary (existence-at-time). A game outcome is input-seeded (no future drand round), ' +
+          'so this is honest 🟡 notary now; the OpenTimestamps proof matures to 🟢 trail-immutability after a Bitcoin block confirms (~hours).'
+  });
+}
+
 const server = http.createServer(async (req, res) => {
   try {
     if (req.method === 'OPTIONS') { res.writeHead(204, CORS); return res.end(); }
     if (req.method === 'POST' && req.url === '/commit') return await commit(req, res);
     if (req.method === 'POST' && req.url === '/reveal') return await reveal(req, res);
+    if (req.method === 'POST' && req.url === '/anchor-record') return await anchorRecord(req, res);
     if (req.method === 'GET' && req.url === '/health') return send(res, 200, { ok: true, tsas: TSAS.map(t => t.name), ahead: AHEAD, ots: ots.available() });
-    send(res, 404, { error: 'POST /commit | POST /reveal | GET /health' });
+    send(res, 404, { error: 'POST /commit | POST /reveal | POST /anchor-record | GET /health' });
   } catch (e) { send(res, 500, { error: e.message }); }
 });
 

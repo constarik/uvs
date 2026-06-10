@@ -3,10 +3,11 @@ FROM node:20-bookworm-slim
 RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY . .
-# Core server uses Node built-ins only — no npm install needed, so the image builds fast and can't
-# fail on a dependency. OpenTimestamps (the optional FREE SECOND anchor) is OFF by default; to enable
-# it, add a `RUN npm install --omit=dev --no-audit --no-fund || true` line below and redeploy. Without
-# it the server still issues genuine 🟢 draws on the ×2 RFC-3161 tokens alone.
+# OpenTimestamps (opentimestamps@0.4.9, pure-JS deps) powers the §5.4 second anchor AND the game's
+# settled-record trail-immutability path (notary now → 🟢 after Bitcoin). Best-effort install: the
+# `|| echo` guarantees the image still builds even if the install hiccups; then the server simply
+# runs without OTS (ots:false) and the RFC-3161 paths are unaffected.
+RUN npm install --omit=dev --no-audit --no-fund || echo "OTS optional dep skipped — server runs without it"
 ENV UVS_ROUND_AHEAD=10
 # Render injects $PORT; the server reads process.env.PORT.
 CMD ["node", "3a-server.js"]
