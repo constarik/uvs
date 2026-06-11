@@ -357,11 +357,19 @@ function downloadRecord(){
   $('mInstant').onclick=function(){ selectMode('instant'); };
   $('mAnchored').onclick=function(){ selectMode('anchored'); };
   // probe the backend; enable the 🟢 toggle only if it's up
-  fetch(BACKEND+'/health',{cache:'no-store'}).then(function(h){ if(!h.ok) throw 0; backendUp=true;
-    $('mAnchored').disabled=false; $('mAnchored').textContent='🔒 Anchored 🟢';
-    // /3A is a clean entry point: ?mode=anchored lands straight in the genuine-🟢 mode.
-    if((new URLSearchParams(location.search).get('mode')||'').toLowerCase()==='anchored') selectMode('anchored');
-  }).catch(function(){ backendUp=false; $('mAnchored').disabled=true; $('mAnchored').textContent='🔒 Anchored 🟢 (offline)'; });
+  // Probe the backend; RETRY through a free-plan cold start (~10-50 s) so the 🟢 toggle and the
+  // ?mode=anchored deep-link engage as soon as the server wakes instead of staying disabled.
+  function probeBackend(attempt){
+    fetch(BACKEND+'/health',{cache:'no-store'}).then(function(h){ if(!h.ok) throw 0; backendUp=true;
+      $('mAnchored').disabled=false; $('mAnchored').textContent='🔒 Anchored 🟢';
+      // /3A is a clean entry point: ?mode=anchored lands straight in the genuine-🟢 mode.
+      if((new URLSearchParams(location.search).get('mode')||'').toLowerCase()==='anchored') selectMode('anchored');
+    }).catch(function(){ backendUp=false; $('mAnchored').disabled=true;
+      if((attempt||0) < 10){ $('mAnchored').textContent='🔒 Anchored 🟢 (waking…)'; setTimeout(function(){ probeBackend((attempt||0)+1); }, 5000); }
+      else { $('mAnchored').textContent='🔒 Anchored 🟢 (offline)'; }
+    });
+  }
+  probeBackend(0);
 })();
 </script>
 </body>
