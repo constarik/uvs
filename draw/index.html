@@ -250,7 +250,9 @@ async function runInstant(){
   $('go').disabled=true; ['anchorCard','youCard','distCard','proof','dlbar'].forEach(function(id){$(id).style.display='none';});
   var serverSeed=randHex(32);
   $('status').innerHTML='Committed a secret seed <b>'+sha256hex(serverSeed).slice(0,16)+'…</b> · picking a future drand round…';
-  var fr=futureRound(Date.now()/1000,9), rnd;
+  // next round (roundAt(now)+1): still unpublished when the seed is fixed (anti-grind holds for this 🟡
+  // demo), but the wait is ≤ one drand period (~3s) instead of ~9s.
+  var fr=futureRound(Date.now()/1000,3), rnd;
   try{ rnd=await pollRound(fr,$('status')); }
   catch(e){ $('status').innerHTML='<span style="color:var(--red)">drand unreachable: '+e.message+' (need internet)</span>'; $('go').disabled=false; return; }
   $('status').innerHTML='<span class="ok">drand round '+fr+' published.</span> Computing '+rec.M.toLocaleString()+' entries…';
