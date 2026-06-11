@@ -130,7 +130,14 @@ async function reveal(req, res) {
 // Honest tier today is 🟡 notary; the OTS proof matures to 🟢 trail-immutability once Bitcoin confirms.
 async function anchorRecord(req, res) {
   const b = await body(req);
-  const commitmentHash = b.commitmentHash || sha256(UVSCore.canonicalJSON(b.record || b));
+  // canonical JSON when the record is integer-clean (cross-language recomputable); otherwise the
+  // EXACT JSON bytes (settled game records carry physics floats; a notary stamps bytes).
+  let commitmentHash = b.commitmentHash || null, hashMode = b.commitmentHash ? 'provided' : null;
+  if (!commitmentHash) {
+    const rec = b.record || b;
+    try { commitmentHash = sha256(UVSCore.canonicalJSON(rec)); hashMode = 'canonical-json'; }
+    catch (e) { commitmentHash = sha256(JSON.stringify(rec)); hashMode = 'json-bytes'; }
+  }
   let notary, otsProof;
   try {
     const [a, o] = await Promise.all([
@@ -140,7 +147,7 @@ async function anchorRecord(req, res) {
     notary = a; otsProof = (o && o.ok) ? o : null;
   } catch (e) { return send(res, 502, { error: 'RFC-3161 notary stamping failed: ' + e.message }); }
   send(res, 200, {
-    commitmentHash, notary, ots: otsProof, tier: 'notary',
+    commitmentHash, hashMode, notary, ots: otsProof, tier: 'notary',
     note: 'RFC-3161 = neutral notary (existence-at-time). A game outcome is input-seeded (no future drand round), ' +
           'so this is honest 🟡 notary now; the OpenTimestamps proof matures to 🟢 trail-immutability after a Bitcoin block confirms (~hours).'
   });
