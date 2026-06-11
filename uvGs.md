@@ -293,7 +293,18 @@ Mapping to §3.2: the per-tick `clientSeed` component is the bumper position `"x
 
 **10.5 Determinism audit.** 300 sessions · 454,716 ticks · 4 input policies → result *and full state* reproduced byte-identically, no module-level leakage. The per-tick fresh-PRNG design structurally precludes the running-stream desync class — no un-logged RNG consumption can drift a replay.
 
-**Platform coverage (normative).** A "byte-identical" determinism claim **MUST** be backed by an audit executed on **at least two independent JS engines** (e.g. V8 and JavaScriptCore or SpiderMonkey) **and at least two operating systems**, with the runtime matrix published alongside the audit numbers. Single-runtime reproduction does not exercise the float-divergence class (§3.5) and **MUST NOT** be reported as cross-platform determinism. <!-- TODO(author): publish the PADDLA audit's actual runtime matrix (engines, versions, OSes) here; until then the 300-session figure above is a single-matrix claim. -->
+**Platform coverage (normative).** A "byte-identical" determinism claim **MUST** be backed by an audit executed on **at least two independent JS engines** (e.g. V8 and JavaScriptCore or SpiderMonkey) **and at least two operating systems**, with the runtime matrix published alongside the audit numbers. Single-runtime reproduction does not exercise the float-divergence class (§3.5) and **MUST NOT** be reported as cross-platform determinism.
+
+**Cross-platform matrix (audited 2026-06-11; harness: `paddla-engine/test-xplat-audit.js` — 300 sessions · 229,536 ticks · 4 integer-LCG input policies, header timestamp and RNG internals excluded from hashes per core §3):**
+
+| Runtime | Engine | OS | STATE digest | RESULTS digest |
+|---|---|---|---|---|
+| node 24.12 | V8 | Windows x64 | `60e11a9c…8d4955` | `926e1d69…54edd6` |
+| node 22.22 (native ChaCha20) | V8 | Linux x64 | `60e11a9c…8d4955` | `926e1d69…54edd6` |
+| node 22.22 (pure-JS ChaCha20) | V8 | Linux x64 | `60e11a9c…8d4955` | `926e1d69…54edd6` |
+| bun 1.3.14 | JavaScriptCore | Linux x64 | `4eb17938…ac4096` | `926e1d69…54edd6` |
+
+Findings: **outcomes (tick counts + totalWin) are byte-identical on all four configurations** — across engines (V8 vs JSC), operating systems, Node major versions, and ChaCha20 implementations (native and pure-JS keystreams verified word-identical). Full mid-flight float state is byte-identical **within an engine family** across OSes and versions, but drifts in low-order float bits **across engines** — the §3.5 divergence class, and precisely why per-step `stateHash` is an in-play diagnostic (§10.3), never trail data: replay verification compares results, which carry no engine fingerprint.
 
 **10.6 Trust tier.** Live PADDLA binds the pre-play commit via the Registrar and notarizes the trail with a drand round (core §9) → tier 🟡. It is not outcome-bound (the seed does not derive from a future round), by deliberate design — the arcade favors instant play over the ~seconds wait per-game outcome-binding would require. The designated upgrade path is §3.6: one session-open binding (hidden in load time, pipelined thereafter) lifts every game in the session to 🟢 without touching the instant-play feel. Per §5.1, the Protected layer contributes nothing to this tier.
 
