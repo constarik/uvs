@@ -70,7 +70,20 @@ function poolOf(rec) {
   return Array.from({ length: n }, () => rec.prizeLabel || 'WIN');
 }
 
-module.exports = { sha256, combinedSeed, scoreOf, permute, allocate, lookup, poolOf };
+// ── §5.4 anchor round rule (optional) ────────────────────────────────────────
+// drand quicknet: 3s period, genesis 1692803367. A draw bound by the DERIVED-R rule (uvLs §5.4.1)
+// sets R = roundAt(genTime)+1, so genTime < timeOfRound(R) holds by construction and the operator
+// has no choice over R. Given the TSA token's genTime (from `openssl ts -reply -text`) and the
+// record's round, confirm the binding. This checks ORDERING; verify the token itself with `openssl ts -verify`.
+const QUICKNET = { genesis: 1692803367, period: 3 };
+function roundAt(unixSec) { return Math.floor((unixSec - QUICKNET.genesis) / QUICKNET.period) + 1; }
+function timeOfRound(round) { return QUICKNET.genesis + (round - 1) * QUICKNET.period; }
+function checkAnchorRound(genTime, round) {
+  const expectedRound = roundAt(genTime) + 1, roundTime = timeOfRound(round);
+  return { ok: round === expectedRound && genTime < roundTime, expectedRound, roundTime, genBeforeRound: genTime < roundTime };
+}
+
+module.exports = { sha256, combinedSeed, scoreOf, permute, allocate, lookup, poolOf, roundAt, timeOfRound, checkAnchorRound };
 
 // ---- CLI ----
 if (require.main === module) {
@@ -82,6 +95,12 @@ if (require.main === module) {
   const combined = combinedSeed(rec.serverSeed, rec.drand.randomness);
   const prizes = poolOf(rec);
   console.log('combinedSeed = SHA-256(serverSeed:drandRandomness) =', combined);
+  const ca = rec.commitmentAnchor;
+  if (ca && ca.genTime != null && rec.drand && rec.drand.round != null && String(ca.roundRule || '').startsWith('roundAt')) {
+    const c = checkAnchorRound(ca.genTime, rec.drand.round);
+    console.log('§5.4 derived-R: R==roundAt(genTime)+1 ?', rec.drand.round === c.expectedRound,
+      '| genTime<timeOfRound(R) ?', c.genBeforeRound, '->', c.ok ? 'OK' : 'FAIL');
+  }
   if (id) {
     const r = lookup(rec.participants, combined, id, prizes);
     console.log(`${id}: ${r.present ? 'rank ' + r.rank + ' of ' + rec.participants.length + ' -> ' + (r.prize || 'no prize') : 'NOT in the committed list'}`);

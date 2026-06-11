@@ -30,6 +30,16 @@ public class DrawVerify {
             throw new IllegalArgumentException("INVALID: duplicate participant ids - record rejected (uvLs 3.1)");
     }
 
+    // §5.4 anchor round rule (optional). drand quicknet: 3s period, genesis 1692803367. The DERIVED-R
+    // rule (uvLs 5.4.1) sets R = roundAt(genTime)+1, so genTime < timeOfRound(R) by construction and R
+    // is not the operator's choice. Checks ORDERING; verify the token itself with `openssl ts -verify`.
+    static final long QN_GENESIS = 1692803367L, QN_PERIOD = 3L;
+    static long roundAt(long unixSec) { return (unixSec - QN_GENESIS) / QN_PERIOD + 1; }
+    static long timeOfRound(long round) { return QN_GENESIS + (round - 1) * QN_PERIOD; }
+    static boolean checkAnchorRound(long genTime, long round) {
+        return round == roundAt(genTime) + 1 && genTime < timeOfRound(round);
+    }
+
     public static void main(String[] args) throws Exception {
         String serverSeed = "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8091a2b3c4d5e6f70811223344556";
         String randomness = "e8d0543d60b639cf02775d16d8bc66f281b7bcbdf59706f29a1684889f8b9548";
@@ -55,5 +65,10 @@ public class DrawVerify {
         dup[M] = "TICKET-0007";
         try { requireUnique(dup); System.out.println("FAIL: duplicate-ids not rejected"); }
         catch (IllegalArgumentException ex) { System.out.println("negative vector duplicate-ids: correctly rejected"); }
+
+        // §5.4.1 derived-R rule: R must be the first round strictly after the stamp's genTime
+        long genTime = 1781155964L, round = roundAt(genTime) + 1;
+        System.out.println("§5.4 derived-R (genTime=" + genTime + ", R=" + round + "): "
+            + (checkAnchorRound(genTime, round) ? "OK" : "FAIL"));
     }
 }

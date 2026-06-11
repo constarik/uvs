@@ -26,6 +26,16 @@ bool isUnique(const vector<string>& parts) {
   return set<string>(parts.begin(), parts.end()).size() == parts.size();
 }
 
+// §5.4 anchor round rule (optional). drand quicknet: 3s period, genesis 1692803367. The DERIVED-R
+// rule (uvLs 5.4.1) sets R = roundAt(genTime)+1, so genTime < timeOfRound(R) by construction and R is
+// not the operator's choice. Checks ORDERING; verify the token itself with `openssl ts -verify`.
+static const int64_t QN_GENESIS = 1692803367LL, QN_PERIOD = 3LL;
+int64_t roundAt(int64_t unixSec)  { return (unixSec - QN_GENESIS) / QN_PERIOD + 1; }
+int64_t timeOfRound(int64_t round){ return QN_GENESIS + (round - 1) * QN_PERIOD; }
+bool checkAnchorRound(int64_t genTime, int64_t round) {
+  return round == roundAt(genTime) + 1 && genTime < timeOfRound(round);
+}
+
 static const uint32_t K[64] = {
   0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,
   0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,
@@ -96,5 +106,10 @@ int main() {
   // negative vector (uvLs §3.1): the same list with TICKET-0007 repeated MUST be rejected
   vector<string> dup = parts; dup.push_back("TICKET-0007");
   printf("negative vector duplicate-ids: %s\n", isUnique(dup) ? "FAIL not rejected" : "correctly rejected");
+
+  // §5.4.1 derived-R rule: R must be the first round strictly after the stamp's genTime
+  int64_t genTime = 1781155964LL, round = roundAt(genTime) + 1;
+  printf("5.4 derived-R (genTime=%lld, R=%lld): %s\n", (long long)genTime, (long long)round,
+         checkAnchorRound(genTime, round) ? "OK" : "FAIL");
   return 0;
 }

@@ -56,6 +56,18 @@ def pool_of(rec):
     n = rec.get('winners') or rec.get('N') or 0
     return [rec.get('prizeLabel', 'WIN')] * n
 
+# -- §5.4 anchor round rule (optional) --
+# drand quicknet: 3s period, genesis 1692803367. The DERIVED-R rule (uvLs 5.4.1) sets
+# R = round_at(genTime)+1, so genTime < time_of_round(R) holds by construction and R is not the
+# operator's choice. Confirm ORDERING here; verify the token itself with `openssl ts -verify`.
+QN_GENESIS, QN_PERIOD = 1692803367, 3
+def round_at(unix_sec): return (unix_sec - QN_GENESIS) // QN_PERIOD + 1
+def time_of_round(rnd): return QN_GENESIS + (rnd - 1) * QN_PERIOD
+def check_anchor_round(gen_time, rnd):
+    expected = round_at(gen_time) + 1
+    rt = time_of_round(rnd)
+    return {'ok': rnd == expected and gen_time < rt, 'expectedRound': expected, 'roundTime': rt, 'genBeforeRound': gen_time < rt}
+
 if __name__ == '__main__':
     if len(sys.argv) < 2:
         print('usage: python draw_verify.py <record.json> [id]'); sys.exit(2)
@@ -65,6 +77,11 @@ if __name__ == '__main__':
     combined = combined_seed(rec['serverSeed'], rec['drand']['randomness'])
     prizes = pool_of(rec)
     print('combinedSeed = SHA-256(serverSeed:drandRandomness) =', combined)
+    ca = rec.get('commitmentAnchor')
+    if ca and ca.get('genTime') is not None and rec.get('drand', {}).get('round') is not None and str(ca.get('roundRule', '')).startswith('roundAt'):
+        c = check_anchor_round(ca['genTime'], rec['drand']['round'])
+        print('5.4 derived-R: R==round_at(genTime)+1 ?', rec['drand']['round'] == c['expectedRound'],
+              '| genTime<time_of_round(R) ?', c['genBeforeRound'], '->', 'OK' if c['ok'] else 'FAIL')
     if len(sys.argv) > 2:
         r = lookup(rec['participants'], combined, sys.argv[2], prizes)
         if r['present']:

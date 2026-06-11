@@ -149,13 +149,34 @@ An implementation **MAY** instead bind a *past or concurrent* round as a **notar
 
 Outcome-binding rests entirely on the premise that the commitment existed **before** round `R` published. A commitment hosted only on the operator's own infrastructure proves nothing about *when* it appeared: a dishonest operator could wait for `randomness(R)`, grind a favorable `serverSeed`, and backdate the page. The future round defeats grinding only if the commitment's priority is itself provable.
 
-Define the **commitment record** as the Canonical JSON (core §5) of `{ participants, prizePool, commitment, chainHash, round R }`, and `commitmentHash = SHA-256(commitment record)`.
+Define the **commitment record** as the Canonical JSON (core §5) of `{ participants, prizePool, commitment, chainHash }` — optionally with `round R` when `R` is fixed in advance. §5.4.1 gives a tighter variant that *derives* `R` from the stamp and therefore omits it here. `commitmentHash = SHA-256(commitment record)`.
 
 For a draw to classify 🟢, `commitmentHash` **MUST** carry evidence of existence before `timeOfRound(R)` that does not depend on trusting the operator. Acceptable evidence — any one of:
 
 - **RFC 3161 timestamp (recommended for short windows).** A timestamp token over `commitmentHash` from one or more independent RFC 3161 Time-Stamping Authorities, whose `genTime` is before `timeOfRound(R)` and whose signature verifies against the TSA's published certificate (e.g. `openssl ts -verify`). A TSA is operator-independent, so this is the **neutral-registry** path with an *immediate* token — the only acceptable evidence that fits a commit→`R` window of seconds to minutes. A single TSA trusts one authority's clock and key; stamping at **two independent TSAs in different jurisdictions** (e.g. FreeTSA + a commercial CA) is RECOMMENDED, making backdating-by-collusion implausible.
 - **Append-only public medium.** Inclusion of `commitmentHash` in a public transparency log, a public blockchain transaction, or an OpenTimestamps proof, at a position whose attested time is verifiably before `timeOfRound(R)`. **Note on OpenTimestamps:** an OTS proof qualifies only once its **Bitcoin confirmation has landed and that block's time precedes `timeOfRound(R)`** — a *pending* calendar attestation proves nothing about ordering. Because Bitcoin aggregation takes hours, OTS alone suits only draws announced hours-to-days ahead of `R`; for short windows it serves as a free **second** anchor that upgrades the record after the fact (trail-immutability, or an independent priority proof for long windows).
 - **Neutral registry.** A signature over `commitmentHash` by a published neutral-registry key (core §10.1) together with a signed timestamp before `timeOfRound(R)`, where the registry's signing log is itself publicly auditable.
+
+#### 5.4.1 Deriving R from the stamp (RECOMMENDED for short windows)
+
+There are two ways to bind the round:
+
+- **Commit `R` in advance.** Pick a future round `R`, include it in the commitment record, then anchor `commitmentHash`. The verifier checks `genTime < timeOfRound(R)`.
+- **Derive `R` from the stamp (tighter — the recommended pattern).** Anchor `commitmentHash` *without* a round, read the proven `genTime`, then set
+
+  ```
+  R = roundAt(genTime) + 1          # the first round strictly after the stamp
+  ```
+
+  With two TSAs, use the **latest** token's `genTime` (`max`), so every token predates `R`.
+
+The derived form has three properties the explicit form lacks:
+
+1. **`genTime < timeOfRound(R)` holds by construction** — `R` is the first round *after* `genTime`, so the condition cannot fail.
+2. **No operator choice over `R`** — `R` is a deterministic function of a neutral timestamp the operator does not control, so there is nothing to grind. (The explicit form is safe too, but only because the public audit trail forces a single commit; the derived form removes the degree of freedom outright.)
+3. **Minimal wait** — `R` publishes at most one beacon period after the stamp (~3 s on quicknet), versus an arbitrary look-ahead margin.
+
+A verifier of a derived-`R` record **MUST** check both `R == roundAt(genTime) + 1` (using the latest token's `genTime`) and `genTime < timeOfRound(R)`. The round `R` lives in the final draw record (§7), bound to the anchor by this rule rather than by being inside `commitmentHash`.
 
 In addition, the commitment record **SHOULD** embed `randomness(R_c)` of a recent **past** round `R_c < R`. This pins a *lower* bound — the record cannot predate `R_c`'s publication — and narrows the window `[timeOfRound(R_c), timeOfRound(R)]` inside which an auditor must place the anchor. The lower bound alone is **not** sufficient evidence: it proves the record is not too old, not that it is old enough.
 
