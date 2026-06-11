@@ -37,7 +37,13 @@ const TSAS = process.env.UVS_TSA_LOCAL
   : [{ name: 'freetsa', url: 'https://freetsa.org/tsr' },          // ×2 independent TSAs, different
      { name: 'digicert', url: 'http://timestamp.digicert.com' }]; // operators/jurisdictions (uvLs §5.4)
 
-const host = createHost({ sha256, versions: [1, 2, 3] }).use(makeLottery({ sha256, name: 'lottery' }));
+// TSA CA bundle: lets the host VERIFY the RFC-3161 tokens it stores (audit A1) — without it
+// every draw honestly stays 🟡. Baked into the Docker image by fetch at build; override via env.
+// For the local-TSA test mode the local CA is the right trust root.
+const TSA_CA = process.env.UVS_TSA_CA
+  || (process.env.UVS_TSA_LOCAL ? path.join(process.env.UVS_TSA_LOCAL, 'ca.pem') : path.join(__dirname, 'tsa-ca-bundle.pem'));
+const host = createHost({ sha256, versions: [1, 2, 3], tsa: { caFile: TSA_CA, openssl: OPENSSL } })
+  .use(makeLottery({ sha256, name: 'lottery' }));
 
 // Pending commit→reveal state, persisted to disk so it survives a process restart inside the
 // commit→reveal window (serverSeed stays secret on the server until reveal). One file per session.

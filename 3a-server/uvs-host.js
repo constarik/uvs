@@ -196,7 +196,10 @@ function createHost(cfg) {
       let commitTime = body.commitTime != null ? body.commitTime : null;
       let commitTimeSource = commitTime != null ? 'claimed' : null;
       if (body.commitmentAnchor && roundTime != null) {
-        const base = { chainHash: D.QUICKNET.chainHash, commitment, participants: body.participants, prizePool: prizes };
+        // prizePool in the commitment record is the DECLARED pool (rules.prizePool, or the rules
+        // object itself) — exactly as /commit hashed it, NOT the expanded prizes array.
+        const poolDecl = (body.rules && body.rules.prizePool) || body.rules || {};
+        const base = { chainHash: D.QUICKNET.chainHash, commitment, participants: body.participants, prizePool: poolDecl };
         const expectedDerived = sha256(UVSCore.canonicalJSON(base));
         const expectedExplicit = sha256(UVSCore.canonicalJSON(Object.assign({ round: body.drand.round }, base)));
         const form = body.commitmentAnchor.commitmentHash === expectedDerived ? 'derived'
