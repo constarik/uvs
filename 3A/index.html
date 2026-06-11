@@ -3,14 +3,17 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>UVS 3A → /draw</title>
-<meta http-equiv="refresh" content="0; url=/draw/">
-<link rel="canonical" href="/draw/">
+<title>UVS 3A → /draw (Anchored 🟢)</title>
+<meta http-equiv="refresh" content="0; url=/draw/?mode=anchored">
+<link rel="canonical" href="/draw/?mode=anchored">
 <style>body{background:#04080f;color:#e8edf5;font-family:'Courier New',monospace;padding:40px;text-align:center}a{color:#00d4ff}</style>
-<script>location.replace('/draw/' + location.search);</script>
+<script>
+  var s = new URLSearchParams(location.search); s.set('mode','anchored');
+  location.replace('/draw/?' + s.toString());
+</script>
 </head>
 <body>
-  <p>The 🟡/🟢 anchored draw now lives on the main draw page.</p>
-  <p>Redirecting to <a href="/draw/">/draw</a>…</p>
+  <p>The genuine 🟢 anchored draw now opens directly on the main draw page.</p>
+  <p>Redirecting to <a href="/draw/?mode=anchored">/draw (Anchored 🟢)</a>…</p>
 </body>
 </html>

@@ -359,6 +359,8 @@ function downloadRecord(){
   // probe the backend; enable the 🟢 toggle only if it's up
   fetch(BACKEND+'/health',{cache:'no-store'}).then(function(h){ if(!h.ok) throw 0; backendUp=true;
     $('mAnchored').disabled=false; $('mAnchored').textContent='🔒 Anchored 🟢';
+    // /3A is a clean entry point: ?mode=anchored lands straight in the genuine-🟢 mode.
+    if((new URLSearchParams(location.search).get('mode')||'').toLowerCase()==='anchored') selectMode('anchored');
   }).catch(function(){ backendUp=false; $('mAnchored').disabled=true; $('mAnchored').textContent='🔒 Anchored 🟢 (offline)'; });
 })();
 </script>
