@@ -198,7 +198,7 @@ var $=function(id){return document.getElementById(id);};
 var current=null;
 
 /* ── mode (🟡 in-browser / 🟢 anchored backend) ── */
-var BACKEND=new URLSearchParams(location.search).get('backend')||'https://uvs-3a.onrender.com';
+var BACKEND=new URLSearchParams(location.search).get('backend')||'https://registrar.uncloned.work'; // 3Б: one host carries uvGame (registrar) + uvLottery (anchored draws)
 var mode='instant', backendUp=false;
 function setBadge(tier){ var b=$('badge');
   if(tier==='green'){ b.className='badge green'; b.textContent='UVS + drand 🟢 + RFC-3161'; }
