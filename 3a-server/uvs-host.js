@@ -241,7 +241,9 @@ function createHost(cfg) {
         tierFacts: facts, tier, ts: Date.now()
       };
       await storage.put(drawId, record);
-      return { ok: true, drawId, combinedSeed, result, tier, trailUrl: trailPath + '/' + drawId };
+      // anchorCheck/commitTimeSource travel with the response so the published record can
+      // carry the host's verification verdict, not just the tier it produced (audit A1 follow-up).
+      return { ok: true, drawId, combinedSeed, result, tier, anchorCheck, commitTimeSource, trailUrl: trailPath + '/' + drawId };
     },
 
     // POST /draw/:name/verify — recompute a draw record from scratch and compare the order
