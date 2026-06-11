@@ -167,7 +167,8 @@ var QN={period:3,genesis:1692803367};
 function roundAt(t){return Math.floor((t-QN.genesis)/QN.period)+1;}
 function timeOfRound(r){return QN.genesis+(r-1)*QN.period;}
 function futureRound(now,ahead){return roundAt(now)+Math.max(1,Math.ceil((ahead||9)/QN.period));}
-function randHex(n){var a=new Uint8Array(n); if(window.crypto&&crypto.getRandomValues)crypto.getRandomValues(a); else for(var i=0;i<n;i++)a[i]=Math.floor(Math.random()*256);
+function randHex(n){ if(!(window.crypto&&crypto.getRandomValues)) throw new Error('CSPRNG unavailable — refusing to generate a seed without crypto.getRandomValues');
+  var a=new Uint8Array(n); crypto.getRandomValues(a);
   return [].map.call(a,function(b){return b.toString(16).padStart(2,'0');}).join('');}
 var SOURCES=[
   function(R){return 'https://drand.cloudflare.com/'+CHAIN+'/public/'+R;},

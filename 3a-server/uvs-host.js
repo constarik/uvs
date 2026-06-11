@@ -19,6 +19,30 @@
 
 const UVSCore = require('./uvs-core.js');
 const crypto = require('crypto');
+const rfc3161 = require('./uvs-anchor-rfc3161.js');
+
+// ---- §5.4 anchor verification: an anchor is EVIDENCE only if it VERIFIES. ----
+// Presence of a `proof` field is not proof (audit A1). Every RFC 3161 token must
+// verify over `commitmentHash` against the host-configured TSA CA bundle. Returns
+// { ok, genTime?, verified?, reason? } — genTime is the LATEST verified token time
+// (max), per §5.4.1: with multiple TSAs, every token must predate R, so the round
+// rule is checked against max(genTime). Time/round checks live in the caller.
+function verifyAnchor3161(ca, commitmentHash, tsaCfg) {
+  if (!tsaCfg || !tsaCfg.caFile)
+    return { ok: false, reason: 'host has no TSA CA configured (cfg.tsa.caFile) — anchor cannot be verified, tier stays amber' };
+  const toks = Array.isArray(ca.tokens) ? ca.tokens
+    : (ca.proof ? [{ tsa: ca.tsa || 'tsa', proof: ca.proof }] : []);
+  if (!toks.length) return { ok: false, reason: 'no tokens in commitmentAnchor' };
+  let maxGen = null, verified = 0;
+  for (const t of toks) {
+    try {
+      const r = rfc3161.verify(commitmentHash, Buffer.from(String(t.proof), 'base64'), tsaCfg.caFile, tsaCfg.openssl || 'openssl');
+      if (r.ok && r.genTime != null) { verified++; if (maxGen == null || r.genTime > maxGen) maxGen = r.genTime; }
+    } catch (e) { /* this token failed; the next may still verify */ }
+  }
+  return verified ? { ok: true, genTime: maxGen, verified }
+    : { ok: false, reason: 'no token verified over commitmentHash' };
+}
 
 // ---- optional module: in-memory storage (dev/tests). Swap for Firestore etc. ----
 function memoryStorage() {
@@ -56,6 +80,7 @@ function createHost(cfg) {
   const storage = cfg.storage || memoryStorage();  // optional module
   const seed = cfg.seed || null;                   // optional: registrar / commit-reveal authority
   const anchor = cfg.anchor || null;               // optional: drand/chain anchor
+  const tsa = cfg.tsa || null;                     // optional: { caFile, openssl? } — §5.4 anchor verification (without it no draw reaches 🟢)
   const neutralHost = !!cfg.neutralHost;           // operator-declared: neutral registry vs self-host
   const defaultGame = cfg.defaultGame || null;     // back-compat: assume this game when a client omits `game`
   const trailPath = cfg.trailPath || '/trail';
@@ -150,32 +175,66 @@ function createHost(cfg) {
       if (g.profile !== 'draw') return { ok: false, error: 'draw is for draw plugins; ' + name + ' is ' + g.profile };
       if (!body.serverSeed || !body.drand || body.drand.randomness == null || !Array.isArray(body.participants))
         return { ok: false, error: 'missing fields (serverSeed, drand.randomness, participants)' };
+      // uvLs §3.1 (audit A3): duplicate ids break the total order — reject, don't rank.
+      if (new Set(body.participants).size !== body.participants.length)
+        return { ok: false, error: 'INVALID: duplicate participant ids — record rejected (uvLs §3.1)' };
       const D = g.draw;
       const combinedSeed = D.combinedSeed(body.serverSeed, body.drand.randomness);
       const prizes = D.poolOf(body.rules || {});
       const result = D.allocate(body.participants, combinedSeed, prizes);
+      const commitment = body.commitment || sha256(body.serverSeed);
       // tier DERIVED, not claimed: outcome-bound iff the drand round publishes AFTER the commit
       // (future round = anti-grind). A past/concurrent round is only a notary -> amber.
       const roundTime = body.drand.round != null ? D.timeOfRound(body.drand.round) : null;
-      const outcomeBound = roundTime != null && body.commitTime != null && roundTime > body.commitTime;
-      // a draw's trust derives from the drand binding (uvLs §8), not a seed authority:
-      // no round = red; past/concurrent = notary (amber); future round = outcome-bound, but 🟢 only
-      // with a §5.4 commitment anchor proving the commitment preceded R — otherwise 🟡 (backdating risk).
-      const commitmentAnchored = !!(body.commitmentAnchor && body.commitmentAnchor.proof);
+      // §5.4 (audit A1/A2): the anchor must VERIFY to count toward 🟢, and the commit time the
+      // tier rests on is the VERIFIED token genTime — never the caller's claimed commitTime.
+      // Binding (two §5.4 forms): the commitment record is canonicalJSON of
+      //   derived-R (§5.4.1):  { chainHash, commitment, participants, prizePool }   (no round)
+      //   explicit-R:          { chainHash, commitment, participants, prizePool, round }
+      // For derived-R the round rule R == roundAt(maxGenTime)+1 MUST also hold.
+      let commitmentAnchored = false, anchorCheck = null;
+      let commitTime = body.commitTime != null ? body.commitTime : null;
+      let commitTimeSource = commitTime != null ? 'claimed' : null;
+      if (body.commitmentAnchor && roundTime != null) {
+        const base = { chainHash: D.QUICKNET.chainHash, commitment, participants: body.participants, prizePool: prizes };
+        const expectedDerived = sha256(UVSCore.canonicalJSON(base));
+        const expectedExplicit = sha256(UVSCore.canonicalJSON(Object.assign({ round: body.drand.round }, base)));
+        const form = body.commitmentAnchor.commitmentHash === expectedDerived ? 'derived'
+                   : body.commitmentAnchor.commitmentHash === expectedExplicit ? 'explicit' : null;
+        if (!form) {
+          anchorCheck = { ok: false, reason: 'commitmentHash does not bind this draw (neither §5.4 form matches)' };
+        } else {
+          anchorCheck = verifyAnchor3161(body.commitmentAnchor, body.commitmentAnchor.commitmentHash, tsa);
+          if (anchorCheck.ok) {
+            const g = anchorCheck.genTime;
+            const rAt = Math.floor((g - D.QUICKNET.genesis) / D.QUICKNET.period) + 1;
+            const timeOk = g < roundTime;
+            const ruleOk = form === 'explicit' ? timeOk : (body.drand.round === rAt + 1 && timeOk);
+            if (ruleOk) anchorCheck.form = form;
+            else anchorCheck = { ok: false, genTime: g, form, reason: form === 'derived'
+              ? '§5.4.1 round rule failed: R must equal roundAt(maxGenTime)+1 and genTime < timeOfRound(R)'
+              : '§5.4: genTime is not before timeOfRound(R)' };
+          }
+        }
+        if (anchorCheck.ok) { commitmentAnchored = true; commitTime = anchorCheck.genTime; commitTimeSource = 'tsa-genTime'; }
+      }
+      const outcomeBound = roundTime != null && commitTime != null && roundTime > commitTime;
       const facts = { anchored: body.drand.round != null, outcomeBound, commitmentAnchored, neutralHost };
       const tier = deriveTier(facts);
       const drawId = sha256(body.serverSeed + ':' + combinedSeed + ':' + sha256(UVSCore.canonicalJSON(body.participants)));
       const record = {
         gameId: drawId, branch: 'uvLottery', uvsVersion: 3, schema: 'verifiable-allocation/v1',
         protocol: 'UVS-3.0', game: name, model: body.model || null,
-        serverSeed: body.serverSeed, commitment: body.commitment || sha256(body.serverSeed),
+        serverSeed: body.serverSeed, commitment,
         drand: {
           beacon: D.QUICKNET.beacon, chainHash: D.QUICKNET.chainHash, round: body.drand.round,
           randomness: body.drand.randomness, roundTime,
           verifyUrl: body.drand.round != null ? 'https://api.drand.sh/' + D.QUICKNET.chainHash + '/public/' + body.drand.round : null
         },
         combinedSeed, participants: body.participants, rules: body.rules || {}, result,
-        commitmentAnchor: body.commitmentAnchor || null,   // §5.4 evidence; required for 🟢
+        commitmentAnchor: body.commitmentAnchor || null,   // §5.4 evidence; must VERIFY for 🟢
+        anchorCheck: anchorCheck,                          // { ok, genTime? , reason? } — why the tier is what it is
+        commitTime, commitTimeSource,                      // 'tsa-genTime' (verified) | 'claimed' (operator's word)
         tierFacts: facts, tier, ts: Date.now()
       };
       await storage.put(drawId, record);

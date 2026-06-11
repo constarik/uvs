@@ -33,7 +33,13 @@ function makeLottery(opts) {
     if (a.score < b.score) return 1;
     return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
   }
+  // uvLs §3.1: duplicate ids break the total order — reject, don't rank (audit A3).
+  function requireUnique(participants) {
+    if (new Set(participants).size !== participants.length)
+      throw new Error('INVALID: duplicate participant ids — record rejected (uvLs §3.1)');
+  }
   function permute(participants, combined) {
+    requireUnique(participants);
     return participants.map(id => ({ id, score: scoreOf(combined, id) })).sort(cmp);
   }
   // full allocation: each position in the permutation receives prizes[i]
@@ -44,6 +50,7 @@ function makeLottery(opts) {
   }
   // single lookup — O(M) hashing, no sort (a participant checks only their own id)
   function lookup(participants, combined, id, prizes) {
+    requireUnique(participants);
     const me = scoreOf(combined, id);
     let higher = 0, present = false;
     for (const a of participants) {
