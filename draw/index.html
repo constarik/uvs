@@ -302,7 +302,9 @@ async function runAnchored(){
   var tierByLabel={}; rec.tiers.forEach(function(t){tierByLabel[t.label]=t;});
   var ranked=(dr.result||[]).map(function(r){return {rank:r.rank,id:r.id,score:r.score,tier:tierByLabel[r.prize]||rec.tiers[rec.tiers.length-1]};});
   var byId={}; ranked.forEach(function(r){byId[r.id]=r;});
-  current={rec:rec,combined:dr.combinedSeed,ranked:ranked,byId:byId,serverSeed:dr.serverSeed,drand:{round:dr.drand.round,randomness:dr.drand.randomness}};
+  current={rec:rec,combined:dr.combinedSeed,ranked:ranked,byId:byId,serverSeed:dr.serverSeed,drand:{round:dr.drand.round,randomness:dr.drand.randomness},
+    commitment:dr.commitment||null,commitmentHash:dr.commitmentHash||null,
+    commitmentAnchor:dr.commitmentAnchor||null,anchorCheck:dr.anchorCheck||null,tierDerived:dr.tier||null};
   renderAll(rec); setBadge(dr.tier==='green'?'green':'amber');
   $('status').innerHTML = dr.tier==='green'
     ? '<span class="ok">Done — 🟢.</span> Commitment timestamped before drand round '+commit.round+' by ×2 independent RFC-3161 TSAs (§5.4).'
@@ -335,7 +337,8 @@ function downloadRecord(){
   var rec={
     uvs:'verifiable-allocation/v1',
     model:c.rec.name||c.rec.title||'draw',
-    tier: ($('badge').className.indexOf('green')>=0) ? 'green' : 'amber',
+    // tier DERIVED by the host from verified evidence, never read off the UI (core §10)
+    tier: c.tierDerived || 'amber',
     rules:{
       participants:c.rec.M, idPrefix:c.rec.prefix,
       prizePool:c.rec.tiers.map(function(t){return {tier:t.label,key:t.key,count:t.count,pct:+(100*t.count/c.rec.M).toFixed(3)};}),
@@ -346,6 +349,12 @@ function downloadRecord(){
     },
     result:c.ranked.map(function(r){return {rank:r.rank,id:r.id,prize:r.tier.label,score:r.score};})
   };
+  // §5.4 evidence — uvLs §7: commitmentAnchor is REQUIRED in a record claiming 🟢.
+  // Without these fields a third party cannot verify the green tier, only re-derive winners.
+  if(c.commitment) rec.commitment=c.commitment;
+  if(c.commitmentHash) rec.commitmentHash=c.commitmentHash;
+  if(c.commitmentAnchor) rec.commitmentAnchor=c.commitmentAnchor;
+  if(c.anchorCheck) rec.anchorCheck=c.anchorCheck;
   var blob=new Blob([JSON.stringify(rec,null,2)],{type:'application/json'});
   var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='uvs-draw-'+drand.round+'.json'; a.click();
   setTimeout(function(){URL.revokeObjectURL(a.href);},2000);

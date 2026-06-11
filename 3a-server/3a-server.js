@@ -113,7 +113,7 @@ async function reveal(req, res) {
   // reveal is the disclosure moment: return serverSeed + the drand round + the §5.4 anchor so the
   // client can show/download the full proof and re-derive independently.
   send(res, 200, Object.assign({}, dr, {
-    serverSeed: s.serverSeed,
+    serverSeed: s.serverSeed, commitment: s.commitment,
     drand: { beacon: drand.QUICKNET.beacon, chainHash: drand.QUICKNET.chainHash, round: s.round,
              randomness: r.randomness, roundTime: s.roundTime,
              verifyUrl: 'https://api.drand.sh/' + drand.QUICKNET.chainHash + '/public/' + s.round },
