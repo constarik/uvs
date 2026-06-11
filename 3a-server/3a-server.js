@@ -5,11 +5,10 @@
  * so the real §5.4 anchor can ship without touching production.
  *
  *   POST /commit { participants, rules, model }
- *        -> generate serverSeed, commitment, a FUTURE drand round R,
- *           commitmentHash = SHA-256(canonical commitment record),
- *           stamp commitmentHash at the configured RFC-3161 TSA(s),
- *           return { sessionId, commitment, round R, commitmentAnchor }.
- *   POST /reveal { sessionId }   (after round R has published)
+ *        -> serverSeed + commitment; commitmentHash = SHA-256(canonical record, NO round);
+ *           stamp commitmentHash at the RFC-3161 TSA(s); derive R = roundAt(maxGenTime)+1 — the
+ *           first drand round strictly after the proven stamp; return { sessionId, round R, ... }.
+ *   POST /reveal { sessionId }   (after round R has published, ≤ one drand period)
  *        -> fetch randomness(R), run the draw, return the 🟢 record.
  *
  * Built-in http only — no framework. Stamping/verification: ./uvs-anchor-rfc3161.js
@@ -33,7 +32,6 @@ const sha256 = (s) => crypto.createHash('sha256').update(s).digest('hex');
 // drand randomness = SHA-256(signature BYTES); the v2 API returns {round,signature} only.
 const hashBytes = (hex) => crypto.createHash('sha256').update(Buffer.from(hex, 'hex')).digest('hex');
 const OPENSSL = process.env.UVS_OPENSSL || 'openssl';
-const AHEAD = parseInt(process.env.UVS_ROUND_AHEAD || '10', 10);  // seconds until R (parallel stamping lands well inside this)
 const TSAS = process.env.UVS_TSA_LOCAL
   ? [{ name: 'local', local: process.env.UVS_TSA_LOCAL }]
   : [{ name: 'freetsa', url: 'https://freetsa.org/tsr' },          // ×2 independent TSAs, different
@@ -60,8 +58,9 @@ async function commit(req, res) {
   if (!Array.isArray(participants) || !rules) return send(res, 400, { error: 'need participants[] and rules' });
   const serverSeed = crypto.randomBytes(32).toString('hex');
   const commitment = sha256(serverSeed);
-  const fr = drand.futureRound(Math.floor(Date.now() / 1000), AHEAD);
-  const commitmentRecord = { participants, prizePool: rules.prizePool || rules, commitment, chainHash: drand.QUICKNET.chainHash, round: fr.round };
+  // commitmentHash does NOT include the round — the round is DERIVED from the proven timestamp below,
+  // so the operator has no choice over R (nothing to grind) and §5.4 holds by construction.
+  const commitmentRecord = { participants, prizePool: rules.prizePool || rules, commitment, chainHash: drand.QUICKNET.chainHash };
   const commitmentHash = sha256(UVSCore.canonicalJSON(commitmentRecord));
   let anchor, otsProof;
   try {
@@ -73,28 +72,32 @@ async function commit(req, res) {
     ]);
     anchor = a; otsProof = (o && o.ok) ? o : null;
   } catch (e) { return send(res, 502, { error: 'TSA stamping failed: ' + e.message }); }
+  // §5.4 round rule: R = first drand round strictly AFTER the latest stamp. Using max(genTime) guarantees
+  // EVERY token predates R, deterministically (no choice = no grind). The wait is one drand period (<=3s).
+  const genTime = Math.max.apply(null, anchor.tokens.map(t => t.genTime));
+  const round = drand.roundAt(genTime) + 1;
+  const roundTime = drand.timeOfRound(round);
   const sessionId = crypto.randomBytes(8).toString('hex');
-  pending.put(sessionId, { serverSeed, commitment, fr, participants, rules, model: model || 'tickets', commitmentHash, anchor, ots: otsProof });
-  send(res, 200, { sessionId, commitment, round: fr.round, roundTime: fr.time, commitmentHash, commitmentAnchor: anchor, ots: otsProof });
+  pending.put(sessionId, { serverSeed, commitment, round, roundTime, genTime, participants, rules, model: model || 'tickets', commitmentHash, anchor, ots: otsProof });
+  send(res, 200, { sessionId, commitment, round, roundTime, commitmentHash, commitmentAnchor: anchor, ots: otsProof });
 }
 
 async function reveal(req, res) {
   const { sessionId } = await body(req);
   const s = pending.get(sessionId);
   if (!s) return send(res, 404, { error: 'unknown session' });
-  if (drand.timeOfRound(s.fr.round) > Math.floor(Date.now() / 1000)) return send(res, 425, { error: 'round not published yet', round: s.fr.round, roundTime: s.fr.time });
+  if (s.roundTime > Math.floor(Date.now() / 1000)) return send(res, 425, { error: 'round not published yet', round: s.round, roundTime: s.roundTime });
   let r;
-  try { r = await drand.fetchRound(s.fr.round, { fetch: globalThis.fetch, hashBytes }); }
+  try { r = await drand.fetchRound(s.round, { fetch: globalThis.fetch, hashBytes }); }
   catch (e) { return send(res, 502, { error: 'drand fetch failed: ' + e.message }); }
   const tokens = s.anchor.tokens;
-  // §5.4 gate uses the EARLIEST token: one independent TSA stamp predating R already proves the
-  // commitment existed before R (the others corroborate the same commitmentHash). Robust if one TSA lags.
-  const commitTime = Math.min.apply(null, tokens.map(t => t.genTime));
+  // commitTime = the latest stamp; R was derived as roundAt(commitTime)+1 in /commit, so genTime < timeOfRound(R).
+  const commitTime = s.genTime;
   const dr = await host.draw('lottery', {
     serverSeed: s.serverSeed, commitment: s.commitment, commitTime,
-    drand: { round: s.fr.round, randomness: r.randomness },
+    drand: { round: s.round, randomness: r.randomness },
     commitmentAnchor: {
-      kind: 'rfc3161', commitmentHash: s.commitmentHash,
+      kind: 'rfc3161', commitmentHash: s.commitmentHash, roundRule: 'roundAt(genTime)+1',
       proof: tokens[0].proof, genTime: commitTime, tsa: tokens.map(t => t.tsa).join('+'),
       tokens, ots: s.ots || null            // all RFC-3161 tokens + optional OTS second anchor (matures on Bitcoin)
     },
@@ -105,11 +108,11 @@ async function reveal(req, res) {
   // client can show/download the full proof and re-derive independently.
   send(res, 200, Object.assign({}, dr, {
     serverSeed: s.serverSeed,
-    drand: { beacon: drand.QUICKNET.beacon, chainHash: drand.QUICKNET.chainHash, round: s.fr.round,
-             randomness: r.randomness, roundTime: s.fr.time,
-             verifyUrl: 'https://api.drand.sh/' + drand.QUICKNET.chainHash + '/public/' + s.fr.round },
+    drand: { beacon: drand.QUICKNET.beacon, chainHash: drand.QUICKNET.chainHash, round: s.round,
+             randomness: r.randomness, roundTime: s.roundTime,
+             verifyUrl: 'https://api.drand.sh/' + drand.QUICKNET.chainHash + '/public/' + s.round },
     commitmentHash: s.commitmentHash,
-    commitmentAnchor: { kind: 'rfc3161', commitmentHash: s.commitmentHash, genTime: commitTime,
+    commitmentAnchor: { kind: 'rfc3161', commitmentHash: s.commitmentHash, genTime: commitTime, roundRule: 'roundAt(genTime)+1',
                         tsa: tokens.map(t => t.tsa).join('+'), tokens, ots: s.ots || null }
   }));
 }
@@ -143,10 +146,10 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'POST' && req.url === '/commit') return await commit(req, res);
     if (req.method === 'POST' && req.url === '/reveal') return await reveal(req, res);
     if (req.method === 'POST' && req.url === '/anchor-record') return await anchorRecord(req, res);
-    if (req.method === 'GET' && req.url === '/health') return send(res, 200, { ok: true, tsas: TSAS.map(t => t.name), ahead: AHEAD, ots: ots.available() });
+    if (req.method === 'GET' && req.url === '/health') return send(res, 200, { ok: true, tsas: TSAS.map(t => t.name), roundRule: 'roundAt(genTime)+1', ots: ots.available() });
     send(res, 404, { error: 'POST /commit | POST /reveal | POST /anchor-record | GET /health' });
   } catch (e) { send(res, 500, { error: e.message }); }
 });
 
 const PORT = process.env.PORT || 3939;
-server.listen(PORT, () => console.log('3A anchored-draw server on :' + PORT + '  TSAs=' + TSAS.map(t => t.name).join('+') + '  ahead=' + AHEAD + 's'));
+server.listen(PORT, () => console.log('3A anchored-draw server on :' + PORT + '  TSAs=' + TSAS.map(t => t.name).join('+') + '  round=roundAt(genTime)+1'));
