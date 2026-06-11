@@ -22,11 +22,25 @@ const http = require('http');
 
 function _tmp(ext) { return path.join(os.tmpdir(), 'uvs3a_' + Math.random().toString(16).slice(2) + ext); }
 
+// Windows OpenSSL builds often point OPENSSL_CONF at a non-existent
+// "C:\Program Files\Common Files\ssl\openssl.cnf" and die on EVERY invocation.
+// `openssl ts` needs no config for query/text/verify, so feed it an empty one —
+// unless the caller already set a valid OPENSSL_CONF themselves.
+let _emptyCnf = null;
+function _opensslEnv() {
+  if (process.env.OPENSSL_CONF && fs.existsSync(process.env.OPENSSL_CONF)) return process.env;
+  if (!_emptyCnf) {
+    try { _emptyCnf = _tmp('.cnf'); fs.writeFileSync(_emptyCnf, '# intentionally empty: openssl ts needs no config here\n'); }
+    catch (e) { _emptyCnf = null; return process.env; }
+  }
+  return Object.assign({}, process.env, { OPENSSL_CONF: _emptyCnf });
+}
+
 /** Build a DER RFC 3161 request (.tsq) over an already-computed SHA-256 hex digest. */
 function buildRequest(hashHex, openssl) {
   const out = _tmp('.tsq');
   execFileSync(openssl, ['ts', '-query', '-digest', hashHex, '-sha256', '-no_nonce', '-cert', '-out', out],
-    { stdio: ['ignore', 'ignore', 'ignore'] });
+    { stdio: ['ignore', 'ignore', 'ignore'], env: _opensslEnv() });
   const buf = fs.readFileSync(out); fs.unlinkSync(out); return buf;
 }
 
@@ -55,7 +69,7 @@ function localReply(tsq, tsaDir, openssl) {
   const qf = _tmp('.tsq'), out = _tmp('.tsr');
   fs.writeFileSync(qf, tsq);
   execFileSync(openssl, ['ts', '-reply', '-config', path.join(tsaDir, 'tsa.cnf'), '-queryfile', qf, '-out', out],
-    { cwd: tsaDir, stdio: ['ignore', 'ignore', 'ignore'] });
+    { cwd: tsaDir, stdio: ['ignore', 'ignore', 'ignore'], env: _opensslEnv() });
   const buf = fs.readFileSync(out); fs.unlinkSync(qf); fs.unlinkSync(out); return buf;
 }
 
@@ -63,7 +77,7 @@ function localReply(tsq, tsaDir, openssl) {
 function _genTime(tsr, openssl) {
   const f = _tmp('.tsr'); fs.writeFileSync(f, tsr);
   let txt = '';
-  try { txt = execFileSync(openssl, ['ts', '-reply', '-in', f, '-text'], { stdio: ['ignore', 'pipe', 'ignore'] }).toString(); }
+  try { txt = execFileSync(openssl, ['ts', '-reply', '-in', f, '-text'], { stdio: ['ignore', 'pipe', 'ignore'], env: _opensslEnv() }).toString(); }
   finally { try { fs.unlinkSync(f); } catch (e) {} }
   const m = txt.match(/Time stamp:\s*(.+)/);
   if (!m) return null;
@@ -80,7 +94,7 @@ function verify(hashHex, tsr, caFile, openssl) {
   let ok = false;
   try {
     const r = execFileSync(openssl, ['ts', '-verify', '-digest', hashHex, '-in', f, '-CAfile', caFile],
-      { stdio: ['ignore', 'pipe', 'pipe'] }).toString();
+      { stdio: ['ignore', 'pipe', 'pipe'], env: _opensslEnv() }).toString();
     ok = /Verification:\s*OK/i.test(r);
   } catch (e) { ok = /Verification:\s*OK/i.test(((e.stdout || '') + (e.stderr || '')).toString()); }
   finally { try { fs.unlinkSync(f); } catch (e) {} }
