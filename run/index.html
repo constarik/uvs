@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Run an anchored draw · UVS operator console</title>
+<style>
+ :root{ --bg:#0e1116; --panel:#171b22; --line:#262c36; --ink:#e8edf4; --dim:#8b95a5;
+   --gold:#f2c14e; --blue:#6ea8fe; --green:#34d17e; --red:#ff5d6c; }
+ *{box-sizing:border-box}
+ body{margin:0;background:radial-gradient(1200px 600px at 50% -10%,#1a2230,#0e1116);color:var(--ink);
+   font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;min-height:100vh;
+   display:flex;flex-direction:column;align-items:center;padding:24px}
+ .wrap{width:100%;max-width:680px}
+ #errbar{display:none;background:#3a1014;border:1px solid #ff5d6c;color:#ffd7db;padding:10px 12px;border-radius:10px;margin-bottom:12px;font:12px ui-monospace,monospace;word-break:break-all}
+ header{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;gap:10px}
+ h1{font-size:19px;margin:0;letter-spacing:.2px}
+ .badge{font-size:11px;padding:3px 9px;border-radius:999px;font-weight:600;white-space:nowrap;color:#bfe3c9;background:rgba(52,209,126,.12);border:1px solid rgba(52,209,126,.4)}
+ .tag{font-size:12.5px;color:var(--dim);margin:0 0 16px}
+ .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px 16px;margin-bottom:14px}
+ .card.off{opacity:.5;pointer-events:none}
+ .card h2{font-size:12px;letter-spacing:.3px;color:var(--ink);margin:0 0 4px;font-weight:700}
+ .card h2 .step{display:inline-block;width:20px;height:20px;line-height:20px;text-align:center;border-radius:50%;background:#1d2531;color:var(--blue);font-size:12px;margin-right:7px}
+ .card .sub{font-size:12px;color:var(--dim);margin:0 0 12px}
+ textarea,input,select{font:inherit;color:var(--ink);background:#11151b;border:1px solid var(--line);border-radius:9px;padding:9px 11px}
+ textarea{width:100%;min-height:110px;resize:vertical;font-family:ui-monospace,monospace;font-size:13px}
+ input{width:100%}
+ .genrow{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:8px;font-size:12.5px;color:var(--dim)}
+ .genrow input{width:90px}
+ .genrow input.pfx{width:120px}
+ .mut{color:#6b7686;font-size:12px;line-height:1.5;margin-top:8px}
+ .trow{display:flex;gap:8px;align-items:center;margin-bottom:7px}
+ .trow input.lbl{flex:1}
+ .trow input.cnt{width:90px}
+ .smallbtn{border:1px solid var(--line);background:#11151b;color:var(--dim);border-radius:8px;padding:7px 10px;cursor:pointer;font:inherit;font-size:13px}
+ .row3{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+ .row3 select{flex:1;min-width:150px;cursor:pointer}
+ .go{width:100%;padding:13px;border:0;border-radius:12px;font-size:15px;font-weight:800;letter-spacing:.3px;cursor:pointer;margin:6px 0 4px;color:#06140c}
+ .go.open{background:linear-gradient(180deg,#6ea8fe,#4d86e0);color:#08101f}
+ .go.close{background:linear-gradient(180deg,#34d17e,#22a261)}
+ .go:disabled{opacity:.5;cursor:not-allowed}
+ .status{font-size:13px;color:var(--dim);min-height:18px;margin:6px 0}
+ .status b{color:var(--ink)} .status .ok{color:var(--green)} .status .err{color:var(--red)}
+ .kv{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;color:var(--dim);word-break:break-all;margin:7px 0}
+ .kv b{color:var(--ink)} .kv a{color:var(--blue)} .kv .ok{color:var(--green)} .kv .err{color:var(--red)}
+ .ticket{background:#0f141b;border:1px dashed #3a4456;border-radius:10px;padding:12px;margin:10px 0;font-size:13px}
+ .ticket .big{font-family:ui-monospace,monospace;font-size:15px;color:var(--gold);font-weight:700;letter-spacing:.5px}
+ details{background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:12px 15px;margin-bottom:12px}
+ summary{cursor:pointer;color:var(--blue);font-weight:600;font-size:13px}
+ pre{white-space:pre-wrap;word-break:break-all;font-size:11px;color:var(--dim);margin:10px 0 0}
+ .lnk{color:var(--blue);text-decoration:none}
+ .win{display:flex;gap:10px;padding:7px 10px;border-bottom:1px solid #181d26;font-size:13px}
+ .win .rk{color:var(--dim);width:46px;font-variant-numeric:tabular-nums}
+ .win .id{font-family:ui-monospace,monospace;flex:1}
+ .win .pz{font-weight:600;color:var(--green)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div id="errbar"></div>
+  <header><h1>⚓ Run an anchored draw</h1><span class="badge" title="Trust tier is derived from evidence, not claimed (uvLs §5.4).">UVS · 🟢 anchored</span></header>
+  <p class="tag">Operator console. <b>Two phases, one draw.</b> ① <b>Open</b> fixes the prizes and timestamps them at ×2 independent <b>RFC-3161</b> TSAs <i>before</i> you sell tickets (<a class="lnk" href="https://github.com/constarik/uvs/blob/master/uvLs.md" target="_blank" rel="noopener">uvLs §5.5</a>) and hands you a <b>drawId</b> to print on every ticket. ② <b>Close</b> later (or right away) with the final entrants — the backend binds the outcome to a future <b>drand</b> round and reveals on its own. Your entrants <b>recompute</b> the result themselves.</p>
+
+  <!-- ① OPEN -->
+  <div class="card" id="openCard">
+    <h2><span class="step">1</span>Open the draw — attest the prizes</h2>
+    <p class="sub">No participants yet. This freezes the prize list before sales.</p>
+    <div id="tiers"></div>
+    <button class="smallbtn" id="addTier">+ add prize tier</button>
+    <div class="mut" id="poolInfo"></div>
+    <input id="label" placeholder="Label shown to entrants (e.g. June charity raffle)" style="margin-top:10px">
+    <button class="go open" id="goOpen">① Open — attest the rules (×2 RFC-3161)</button>
+    <div class="status" id="openStatus">Add your prize tiers, then open.</div>
+    <div id="openResult" style="display:none">
+      <div class="kv"><b>drawId</b> <span id="rDrawId" class="ok"></span></div>
+      <div class="kv"><b>rulesHash</b> <span id="rRulesHash"></span></div>
+      <div class="kv"><b>attested at</b><br><span id="rTsas"></span></div>
+      <div class="ticket">Print on every ticket:<br>
+        <span class="big" id="tTicket"></span><br>
+        <span class="mut" id="tLookup"></span></div>
+    </div>
+  </div>
+
+  <!-- ② CLOSE -->
+  <div class="card off" id="closeCard">
+    <h2><span class="step">2</span>Close &amp; draw — commit the entrants</h2>
+    <p class="sub">Same <b>drawId</b> (from step 1, or paste one to resume a sale you opened earlier). Prizes are loaded from the attested rules — you can't change them here.</p>
+    <div class="kv"><b>drawId</b></div>
+    <input id="drawId" placeholder="paste a drawId from a previous Open" style="font-family:ui-monospace,monospace">
+    <textarea id="parts" placeholder="One entry id per line:&#10;TICKET-0001&#10;TICKET-0002&#10;alice@example.com" style="margin-top:10px"></textarea>
+    <div class="genrow">or generate <input id="genN" type="number" min="1" value="100"> tickets, prefix <input id="genPfx" class="pfx" value="TICKET-"> <button class="smallbtn" id="genBtn">fill</button></div>
+    <div class="mut" id="partsInfo">0 entries</div>
+    <div class="row3">
+      <select id="delay">
+        <option value="0">Reveal as soon as the round publishes (~3s)</option>
+        <option value="300">Reveal in ~5 minutes</option>
+        <option value="3600">Reveal in ~1 hour</option>
+        <option value="custom">Custom… (minutes)</option>
+      </select>
+      <input id="delayMin" type="number" min="1" value="30" style="display:none;max-width:130px">
+    </div>
+    <button class="go close" id="goClose">② Close &amp; draw</button>
+    <div class="status" id="closeStatus">Open a draw first (or paste a drawId).</div>
+    <div id="closeResult" style="display:none">
+      <div class="kv"><b>session</b> <span id="cSession"></span></div>
+      <div class="kv"><b>commitment</b> <span id="cCommit"></span></div>
+      <div class="kv"><b>future drand round R</b> <span id="cRound"></span></div>
+      <div class="kv"><b>RFC-3161 anchors</b><br><span id="cTsas"></span></div>
+      <div class="kv"><b>§5.4 — stamped before R?</b> <span id="cOk"></span></div>
+      <div class="kv"><b>give your entrants</b> <a class="lnk" id="cStatus" target="_blank" rel="noopener">live status ↗</a> · <a class="lnk" id="cRecord" target="_blank" rel="noopener">verifiable record ↗</a></div>
+      <button class="smallbtn" id="refresh" style="margin-top:8px">↻ check status / reveal</button>
+    </div>
+  </div>
+
+  <div class="card" id="winCard" style="display:none">
+    <h2>Result — <span id="wTier"></span></h2>
+    <div id="winners"></div>
+    <div class="mut" id="wNote"></div>
+  </div>
+
+  <details id="jsonBox" style="display:none"><summary>Raw JSON (for developers)</summary><pre id="jsonPre"></pre></details>
+</div>
+<script>
+window.onerror=function(m,s,l,c,e){var b=document.getElementById('errbar');if(b){b.style.display='block';b.textContent='⚠ '+((e&&e.message)||m)+' @'+l+':'+c;}return false;};
+var $=function(id){return document.getElementById(id);};
+var BACKEND=new URLSearchParams(location.search).get('backend')||'https://registrar.uncloned.work';
+var SITE=location.origin.indexOf('uncloned.work')>=0?'uvs.uncloned.work':location.host;
+var sess=null, roundTime=0;
+function iso(t){ return new Date(t*1000).toISOString().replace('T',' ').replace('.000Z',' UTC'); }
+
+/* ---- prize tiers (Phase 0) ---- */
+function addTier(label,count){ var d=document.createElement('div'); d.className='trow';
+  d.innerHTML='<input class="lbl" placeholder="prize label (e.g. Grand)"><input class="cnt" type="number" min="1" placeholder="count"><button class="smallbtn rm">✕</button>';
+  d.querySelector('.lbl').value=label||''; if(count) d.querySelector('.cnt').value=count;
+  d.querySelector('.rm').onclick=function(){ d.remove(); refreshPool(); };
+  d.querySelector('.lbl').addEventListener('input',refreshPool); d.querySelector('.cnt').addEventListener('input',refreshPool);
+  $('tiers').appendChild(d); refreshPool(); }
+$('addTier').onclick=function(){ addTier('',''); };
+function poolRows(){ var out=[]; document.querySelectorAll('#tiers .trow').forEach(function(d){
+  var l=d.querySelector('.lbl').value.trim(), c=parseInt(d.querySelector('.cnt').value)||0; if(l&&c>0) out.push({tier:l,count:c}); }); return out; }
+function refreshPool(){ var pool=poolRows(), sum=pool.reduce(function(a,t){return a+t.count;},0);
+  $('poolInfo').textContent = pool.length? (pool.length+' tier(s), '+sum+' prize(s) total — top '+sum+' of the seeded order win, in this order') : 'add at least one prize tier'; }
+
+/* ---- participants (Phase 1) ---- */
+function parts(){ return $('parts').value.split('\n').map(function(s){return s.trim();}).filter(function(s){return s.length;}); }
+function refreshParts(){ var p=parts(), set={}, dup=0; p.forEach(function(x){ if(set[x]) dup++; set[x]=1; });
+  $('partsInfo').innerHTML = p.length+' entries'+(dup?' · <span style="color:var(--gold)">'+dup+' duplicate(s) — ids must be unique (uvLs §3.1)</span>':''); }
+$('parts').addEventListener('input',refreshParts);
+$('genBtn').onclick=function(){ var n=Math.max(1,parseInt($('genN').value)||0), pfx=$('genPfx').value, pad=String(n).length, a=[];
+  for(var i=1;i<=n;i++) a.push(pfx+String(i).padStart(pad,'0')); $('parts').value=a.join('\n'); refreshParts(); };
+$('delay').onchange=function(){ $('delayMin').style.display=this.value==='custom'?'block':'none'; };
+function delaySeconds(){ var v=$('delay').value; return v==='custom'? Math.max(1,parseInt($('delayMin').value)||0)*60 : parseInt(v)||0; }
+
+/* ---- ① open ---- */
+$('goOpen').onclick=async function(){
+  var pool=poolRows(); if(!pool.length){ $('openStatus').innerHTML='<span class="err">Add at least one prize tier.</span>'; return; }
+  $('goOpen').disabled=true; $('openStatus').innerHTML='Attesting the rules at ×2 RFC-3161 TSAs…';
+  var d;
+  try{ var r=await fetch(BACKEND+'/open',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prizePool:pool,label:$('label').value.trim()||null})}); d=await r.json(); if(!r.ok) throw new Error(d.error||'open failed'); }
+  catch(e){ $('openStatus').innerHTML='<span class="err">open failed: '+e.message+'</span>'; $('goOpen').disabled=false; return; }
+  var tokens=(d.rulesAnchor&&d.rulesAnchor.tokens)||[];
+  $('rDrawId').textContent=d.drawId; $('rRulesHash').textContent=(d.rulesHash||'').slice(0,32)+'…';
+  $('rTsas').innerHTML=tokens.map(function(t){return '<span class="ok">'+t.tsa+'</span> '+(t.genTime?iso(t.genTime):'—');}).join('<br>')||'—';
+  $('tTicket').textContent='Draw #'+d.drawId;
+  $('tLookup').innerHTML='Verify at '+SITE+'/d/'+d.drawId+'  <i>(human proof page — next build)</i> · raw record: registrar.uncloned.work/draws/'+d.drawId;
+  $('openResult').style.display='block';
+  $('drawId').value=d.drawId; $('closeCard').classList.remove('off'); $('closeStatus').innerHTML='Rules attested. Add entrants and draw — now or after sales.';
+  $('openStatus').innerHTML='<span class="ok">Opened.</span> Prizes are frozen and timestamped. Print the drawId on every ticket.';
+  $('goOpen').disabled=false;
+};
+
+/* ---- ② close & draw ---- */
+$('goClose').onclick=async function(){
+  var drawId=$('drawId').value.trim(); if(!drawId){ $('closeStatus').innerHTML='<span class="err">Need a drawId — open a draw first, or paste one.</span>'; return; }
+  var p=parts(); if(new Set(p).size!==p.length){ $('closeStatus').innerHTML='<span class="err">Duplicate ids — fix them (uvLs §3.1).</span>'; return; }
+  if(p.length<2){ $('closeStatus').innerHTML='<span class="err">Need at least 2 participants.</span>'; return; }
+  $('goClose').disabled=true; ['winCard','jsonBox'].forEach(function(id){$(id).style.display='none';});
+  $('closeStatus').innerHTML='Committing the entrants + timestamping at ×2 RFC-3161 TSAs…';
+  var c;
+  try{ var r=await fetch(BACKEND+'/close',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({drawId:drawId,participants:p,delaySeconds:delaySeconds()})}); c=await r.json(); if(!r.ok) throw new Error(c.error||'close failed'); }
+  catch(e){ $('closeStatus').innerHTML='<span class="err">close failed: '+e.message+'</span>'; $('goClose').disabled=false; return; }
+  sess=c.sessionId; roundTime=c.roundTime;
+  var tokens=(c.commitmentAnchor&&c.commitmentAnchor.tokens)||[];
+  $('cSession').textContent=sess; $('cCommit').textContent=(c.commitment||'').slice(0,24)+'…';
+  $('cRound').textContent=c.round+'  (publishes '+iso(c.roundTime)+')';
+  $('cTsas').innerHTML=tokens.map(function(t){return '<span class="ok">'+t.tsa+'</span> '+(t.genTime?iso(t.genTime):'—');}).join('<br>')||'—';
+  var before=tokens.filter(function(t){return t.genTime&&t.genTime<c.roundTime;}).length;
+  $('cOk').innerHTML= before>=1? '<span class="ok">YES ✓ '+before+'/'+tokens.length+' stamped before R</span>':'<span class="err">NO</span>';
+  $('cStatus').href=BACKEND+'/draw-status/'+sess; $('cRecord').href=BACKEND+'/draws/'+drawId;
+  $('closeResult').style.display='block';
+  $('jsonPre').textContent=JSON.stringify(c,null,2); $('jsonBox').style.display='block';
+  var ds=delaySeconds();
+  $('closeStatus').innerHTML='<span class="ok">Committed.</span> '+(ds?'Scheduled to reveal in '+(ds>=3600?(ds/3600)+' h':(ds/60)+' min')+' — the server reveals on its own.':'Waiting for round '+c.round+' (~3s)…');
+  $('goClose').disabled=false;
+  if(!ds) setTimeout(checkStatus, Math.max(0,(c.roundTime-Date.now()/1000+2))*1000);
+};
+
+/* ---- status / reveal ---- */
+$('refresh').onclick=checkStatus;
+async function checkStatus(){
+  if(!sess) return; $('closeStatus').innerHTML='Checking…';
+  try{
+    var s=await (await fetch(BACKEND+'/draw-status/'+sess)).json();
+    if(s.revealed && s.drawId){ return showRecord(s.drawId); }
+    if(!s.revealed && Date.now()/1000 >= (s.roundTime||roundTime)){
+      var rv=await (await fetch(BACKEND+'/reveal',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:sess})})).json();
+      if(rv && rv.drawId){ return showRecord(rv.drawId, rv); }
+      if(rv && rv.result){ return renderWinners(rv); }
+    }
+    $('closeStatus').innerHTML='Not revealed yet — round publishes '+iso(s.roundTime||roundTime)+'. The server reveals autonomously; check back, or open the live status link.';
+  }catch(e){ $('closeStatus').innerHTML='<span class="err">status check failed: '+e.message+'</span>'; }
+}
+async function showRecord(id, pre){
+  $('cRecord').href=BACKEND+'/draws/'+id;
+  var rec=pre; try{ if(!rec||!rec.result) rec=await (await fetch(BACKEND+'/draws/'+id)).json(); }catch(e){}
+  if(rec&&rec.result) renderWinners(rec);
+  $('closeStatus').innerHTML='<span class="ok">Revealed.</span> The verifiable record is live — give entrants the link; they recompute it themselves.';
+}
+function renderWinners(rec){
+  var tier=rec.tier||'amber';
+  $('wTier').innerHTML= tier==='green'? '<span class="ok">🟢 verified (outcome-bound, ×2 RFC-3161 before R)</span>':'<span style="color:var(--gold)">'+tier+'</span>';
+  var res=(rec.result||[]).filter(function(x){return x.prize;}).slice(0,200);
+  $('winners').innerHTML= res.length? res.map(function(w){return '<div class="win"><span class="rk">#'+w.rank+'</span><span class="id">'+w.id+'</span><span class="pz">'+w.prize+'</span></div>';}).join(''):'<div class="mut">no prize winners</div>';
+  $('wNote').innerHTML='Anyone re-derives this from public inputs with the <a class="lnk" href="https://github.com/constarik/uvs/tree/master/verifiers" target="_blank" rel="noopener">reference verifiers</a> (JS/Python/Java/C++).';
+  $('winCard').style.display='block';
+  $('jsonPre').textContent=JSON.stringify(rec,null,2); $('jsonBox').style.display='block';
+}
+
+/* init */
+addTier('Grand',1); refreshParts();
+</script>
+</body>
+</html>
