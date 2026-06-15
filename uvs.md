@@ -9,10 +9,11 @@ Site: [uncloned.work](https://uncloned.work)
 
 > **Normative language.** The key words **MUST**, **MUST NOT**, **SHOULD**, **SHOULD NOT**, **MAY** in this document are to be interpreted as described in RFC 2119.
 
-> **What changed in v3.** UVS v2 was a single monolithic document covering both interactive games and (implicitly) draws. v3 splits the standard into a shared **core** and two **branches**, because a draw is not a game and resisted being expressed as a mode of the game protocol (no player, no `clientSeed`, a different hash, mandatory public randomness). This document is the **core**: the invariant that both branches share. The branches are specified separately:
+> **What changed in v3.** UVS v2 was a single monolithic document covering both interactive games and (implicitly) draws. v3 splits the standard into a shared **core** and three **branches**, because a draw is not a game and resisted being expressed as a mode of the game protocol (no player, no `clientSeed`, a different hash, mandatory public randomness). This document is the **core**: the invariant all branches share. The branches are specified separately:
 >
 > - **uvGame Standard** (`uvGs.md`) — interactive games with a player (slots, crash, physics arcades, multiplayer).
 > - **uvLottery Standard** (`uvLs.md`) — verifiable draws, lotteries, and allocations (no player; selection from a set by pre-published rules).
+> - **uvGacha Standard** (`uvGacha.md`) — sequential chance draws (gacha banners, loot boxes; per-pull sampling against published odds, optionally with pity), reusing uvGame's commit-reveal chain and uvLottery's integer odds.
 >
 > v2 (`SPEC-v2.md`) is frozen and remains valid for existing deployments. New work targets v3.
 
@@ -53,30 +54,31 @@ UVS-core guarantees that a computation was **fair and reproducible**. Everything
 
 ## 2. The Branch Model
 
-UVS is one core primitive with two branches:
+UVS is one core primitive with three branches:
 
 ```
-            ┌─────────────────────────────────────────┐
-            │  UVS-core  (this document)               │
-            │  determinism · canonical JSON ·          │
-            │  Audit Trail format · reproducibility ·  │
-            │  version negotiation · trust tiers ·     │
-            │  "not trust, but verification"           │
-            └───────────────┬───────────┬──────────────┘
-                            │           │
-              ┌─────────────┴──┐   ┌────┴──────────────┐
-              │  uvGame (uvGs) │   │ uvLottery (uvLs)  │
-              │  player games  │   │ draws / lotteries │
-              │  Stateless·Move│   │ seeded permutation│
-              │  ChaCha20 /512 │   │ drand / SHA-256   │
-              └────────────────┘   └───────────────────┘
+          ┌─────────────────────────────────────────┐
+          │  UVS-core  (this document)               │
+          │  determinism · canonical JSON ·          │
+          │  Audit Trail format · reproducibility ·  │
+          │  version negotiation · trust tiers ·     │
+          │  "not trust, but verification"           │
+          └──────┬───────────────┬───────────────┬───┘
+                 │               │               │
+       ┌─────────┴────┐ ┌────────┴─────┐ ┌───────┴────────┐
+       │ uvGame  uvGs │ │uvLottery uvLs│ │uvGacha .md     │
+       │ player games │ │ draws /      │ │ chance pulls   │
+       │ Stateless·   │ │ lotteries    │ │ per-pull odds  │
+       │ Move·ChaCha20│ │ seeded perm. │ │ stateful pity  │
+       │ SHA-512      │ │ drand·SHA-256│ │ SHA-256 mod D  │
+       └──────────────┘ └──────────────┘ └────────────────┘
 ```
 
 ### 2.1 The boundary principle
 
 The division between core and branch is governed by one rule:
 
-- **In the core** goes everything that is **identical** in both branches and will not change if a third branch is added.
+- **In the core** goes everything that is **identical** across branches and does not change as new branches are added — as uvGacha, the third branch, demonstrated: it was added without touching the core.
 - **In a branch** goes everything that **differs** between branches.
 
 A consequence worth stating explicitly: differences between branches are **branch boundaries, not inconsistencies**. For example, uvGame derives its keystream seed with SHA-512 (it feeds a ChaCha20 key+nonce) while uvLottery scores participants with SHA-256 (it needs a single comparison digest). This is not a hash-consistency bug; it is a property of each branch. The core mandates only that *a* verifiable, reproducible derivation exists — not which digest a branch uses.
