@@ -27,7 +27,7 @@ Slots, crash games, physics arcades, multiplayer. Stateless and Move **Batch** a
 
 ### → [**uvGacha Standard** — `uvGacha.md`](./uvGacha.md)  ·  *sequential chance draws*
 
-Gacha banners, loot boxes, card packs: a sequence of pulls against published drop rates, optionally with stateful pity / guarantee systems. Chance-based like uvLottery, sequential and stateful like uvGame — reuses the commit-reveal seed chain (uvGame §3) and the integer-odds discipline (uvLottery §4/§6.1), and proves the **published odds were the odds applied**. Per pull: `u_i = SHA-256(combinedSeed : i) mod D` over published integer drop rates summing to `D`. Reference resolver in [JavaScript and Python](https://github.com/constarik/uvs/tree/master/verifiers) with stateless + hard-pity test vectors. Tier ceiling **🟡** for instant pulls; **🟢** for a batch bound to a future drand round.
+Gacha banners, loot boxes, card packs: a sequence of pulls against published drop rates, optionally with stateful pity / guarantee systems. Chance-based like uvLottery, sequential and stateful like uvGame — reuses the commit-reveal seed chain (uvGame §3) and the integer-odds discipline (uvLottery §4/§6.1), and proves the **published odds were the odds applied**. Per pull: `u_i = SHA-256(combinedSeed : i) mod D` over published integer drop rates summing to `D`. Reference resolver in [JavaScript, Python, Java, and C++](https://github.com/constarik/uvs/tree/master/verifiers) with stateless + hard-pity test vectors. Tier ceiling **🟡** for instant pulls; **🟢** for a batch bound to a future drand round.
 
 ### → [**UVS-core** — `uvs.md`](./uvs.md)  ·  *the invariant*
 

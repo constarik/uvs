@@ -126,7 +126,7 @@ A verifier, with no privileged access:
 2. rebuilds `combinedSeed`, replays `resolve(rules, …, pullCount)`, and confirms `results[]` matches bit-for-bit (including any stateful pity evaluated in declared order);
 3. for a 🟢 batch record, verifies the §5.4 commit-time anchor and the future-round binding (uvLottery §5.4.1).
 
-A **JavaScript** and **Python** reference resolver (`gacha-resolve.js`, `gacha_resolve.py`) and gacha test vectors — a stateless drop-table vector, a hard-pity vector, and a rates-do-not-sum-to-`D` negative — are published in [`verifiers/`](https://github.com/constarik/uvs/tree/master/verifiers); both implementations reproduce the vectors byte-for-byte. Java and C++ ports follow the same integer contract (§4).
+A reference resolver in **JavaScript, Python, Java, and C++** (`gacha-resolve.js`, `gacha_resolve.py`, `GachaResolve.java`, `gacha_resolve.cpp`) and gacha test vectors — a stateless drop-table vector, a hard-pity vector, and a rates-do-not-sum-to-`D` negative — are published in [`verifiers/`](https://github.com/constarik/uvs/tree/master/verifiers); all four reproduce the vectors byte-for-byte.
 
 ## 8. Branch Threat Model
 
