@@ -51,8 +51,38 @@ def lookup(parts, combined, idv, prizes):
     return {'id': idv, 'present': present, 'rank': rank,
             'prize': prizes[rank - 1] if present and rank <= len(prizes) else None}
 
+# §6.1 proportional pools: a tier count derived from M as an integer num/den with one rounding
+# mode. All-integer so JS (BigInt), Python, Java (long) and C++ (int64) agree; operands are
+# non-negative, so integer division is floor.
+def resolve_count(M, rule):
+    num, den, mode = rule.get('num'), rule.get('den'), rule.get('mode', 'round-half-up')
+    ints = all(isinstance(x, int) and not isinstance(x, bool) for x in (num, den, M))
+    if not ints or den <= 0 or num < 0 or M < 0:
+        raise ValueError('INVALID: proportional num/den/M must be non-negative integers with den>0 (uvLs 6.1)')
+    if mode == 'floor': return (M * num) // den
+    if mode == 'ceil':  return (M * num + den - 1) // den
+    if mode == 'round-half-up': return (2 * M * num + den) // (2 * den)
+    raise ValueError('INVALID: unknown rounding mode "%s" (uvLs 6.1)' % mode)
+
 def pool_of(rec):
     if isinstance(rec.get('prizes'), list): return rec['prizes']
+    if isinstance(rec.get('prizePool'), list):
+        M, prizes, total = len(rec['participants']), [], 0
+        for t in rec['prizePool']:
+            if not isinstance(t.get('tier'), str):
+                raise ValueError('INVALID: tier label must be a string (uvLs 6)')
+            if t.get('rule') is not None:
+                count = resolve_count(M, t['rule'])
+                if t.get('count') is not None and t['count'] != count:   # §6.1/§9.4 mismatch -> reject
+                    raise ValueError('INVALID: tier "%s" count %s != rule-resolved %d (uvLs 6.1)' % (t['tier'], t['count'], count))
+            else:
+                if not isinstance(t.get('count'), int) or isinstance(t.get('count'), bool):
+                    raise ValueError('INVALID: tier count must be a JSON integer (uvLs 6.1)')
+                count = t['count']
+            if total + count > M: count = M - total      # §6.1 ordering: clamp running total to M
+            prizes.extend([t['tier']] * count)
+            total += count
+        return prizes
     n = rec.get('winners') or rec.get('N') or 0
     return [rec.get('prizeLabel', 'WIN')] * n
 

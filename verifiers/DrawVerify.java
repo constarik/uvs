@@ -110,11 +110,50 @@ public class DrawVerify {
     @SuppressWarnings("unchecked")
     static Map<String, Object> parse(String json) { return (Map<String, Object>) new P(json).value(); }
 
-    // ---- prize pool: explicit prizes[], or {winners, prizeLabel} ----
+    // ---- §6.1 proportional: tier count from M as integer num/den, one rounding mode (long math) ----
+    static long resolveCount(long M, Map<String, Object> rule) {
+        Object no = rule.get("num"), de = rule.get("den");
+        if (!(no instanceof Long) || !(de instanceof Long))
+            throw new IllegalArgumentException("INVALID: proportional num/den must be JSON integers (uvLs 6.1)");
+        long num = (Long) no, den = (Long) de;
+        if (den <= 0 || num < 0 || M < 0)
+            throw new IllegalArgumentException("INVALID: den>0 and num/M>=0 required (uvLs 6.1)");
+        String mode = rule.get("mode") != null ? String.valueOf(rule.get("mode")) : "round-half-up";
+        switch (mode) {
+            case "floor": return (M * num) / den;
+            case "ceil":  return (M * num + den - 1) / den;
+            case "round-half-up": return (2 * M * num + den) / (2 * den);
+            default: throw new IllegalArgumentException("INVALID: unknown rounding mode \"" + mode + "\" (uvLs 6.1)");
+        }
+    }
+
+    // ---- prize pool: explicit prizes[]; a §6 prizePool of {tier,count[,rule]} tiers; or {winners, prizeLabel} ----
     @SuppressWarnings("unchecked")
     static List<String> poolOf(Map<String, Object> rec) {
         Object p = rec.get("prizes");
         if (p instanceof List) { List<String> out = new ArrayList<>(); for (Object x : (List<Object>) p) out.add(String.valueOf(x)); return out; }
+        Object pp = rec.get("prizePool");
+        if (pp instanceof List) {
+            long M = ((List<Object>) rec.get("participants")).size();
+            List<String> out = new ArrayList<>(); long total = 0;
+            for (Object o : (List<Object>) pp) {
+                Map<String, Object> t = (Map<String, Object>) o;
+                if (!(t.get("tier") instanceof String)) throw new IllegalArgumentException("INVALID: tier label must be a string (uvLs 6)");
+                long count;
+                if (t.get("rule") instanceof Map) {
+                    count = resolveCount(M, (Map<String, Object>) t.get("rule"));
+                    if (t.get("count") instanceof Long && (Long) t.get("count") != count)   // §6.1/§9.4 mismatch -> reject
+                        throw new IllegalArgumentException("INVALID: tier \"" + t.get("tier") + "\" count " + t.get("count") + " != rule-resolved " + count + " (uvLs 6.1)");
+                } else {
+                    if (!(t.get("count") instanceof Long)) throw new IllegalArgumentException("INVALID: tier count must be a JSON integer (uvLs 6.1)");
+                    count = (Long) t.get("count");
+                }
+                if (total + count > M) count = M - total;   // §6.1 ordering: clamp running total to M
+                for (long k = 0; k < count; k++) out.add((String) t.get("tier"));
+                total += count;
+            }
+            return out;
+        }
         long n = rec.get("winners") instanceof Long ? (Long) rec.get("winners") : (rec.get("N") instanceof Long ? (Long) rec.get("N") : 0L);
         String label = rec.get("prizeLabel") != null ? String.valueOf(rec.get("prizeLabel")) : "WIN";
         List<String> out = new ArrayList<>(); for (long k = 0; k < n; k++) out.add(label); return out;
@@ -163,5 +202,16 @@ public class DrawVerify {
         boolean rejected = false;
         try { permute(dup, c); } catch (IllegalArgumentException e) { rejected = true; }
         System.out.println("negative vector duplicate-ids: " + (rejected ? "correctly rejected" : "FAIL not rejected"));
+
+        // §6.1 proportional rounding cases: columns M,num,den,floor,round-half-up,ceil
+        long[][] cases = { {9,1,10,0,1,1}, {4,1,10,0,0,1}, {15,1,10,1,2,2}, {20,1,4,5,5,5}, {50,5,100,2,3,3} };
+        boolean rp = true;
+        for (long[] cs : cases) {
+            Map<String,Object> rf = new HashMap<>(); rf.put("num", cs[1]); rf.put("den", cs[2]); rf.put("mode", "floor");
+            Map<String,Object> rr = new HashMap<>(); rr.put("num", cs[1]); rr.put("den", cs[2]); rr.put("mode", "round-half-up");
+            Map<String,Object> rc = new HashMap<>(); rc.put("num", cs[1]); rc.put("den", cs[2]); rc.put("mode", "ceil");
+            if (resolveCount(cs[0], rf) != cs[3] || resolveCount(cs[0], rr) != cs[4] || resolveCount(cs[0], rc) != cs[5]) rp = false;
+        }
+        System.out.println("6.1 proportional rounding: " + (rp ? "OK" : "FAIL"));
     }
 }

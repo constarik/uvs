@@ -78,6 +78,51 @@
       "prize": null
     }
   ],
+  "proportional": {
+    "description": "§6.1 participant-dependent pools. `rounding` lists resolveCount(M,num,den,mode) cases; `record` expresses the canonical 5 SEAT prizes as a proportional rule (1 in 4, round-half-up) over the same 20 participants - it MUST reproduce the same 5 winners as the explicit `winners: 5` record above.",
+    "rounding": [
+      { "M": 9,  "num": 1, "den": 10,  "mode": "floor",         "count": 0 },
+      { "M": 9,  "num": 1, "den": 10,  "mode": "round-half-up", "count": 1 },
+      { "M": 9,  "num": 1, "den": 10,  "mode": "ceil",          "count": 1 },
+      { "M": 4,  "num": 1, "den": 10,  "mode": "round-half-up", "count": 0 },
+      { "M": 14, "num": 1, "den": 10,  "mode": "round-half-up", "count": 1 },
+      { "M": 15, "num": 1, "den": 10,  "mode": "round-half-up", "count": 2 },
+      { "M": 20, "num": 1, "den": 4,   "mode": "round-half-up", "count": 5 },
+      { "M": 50, "num": 5, "den": 100, "mode": "round-half-up", "count": 3 },
+      { "M": 1,  "num": 1, "den": 10,  "mode": "ceil",          "count": 1 },
+      { "M": 0,  "num": 1, "den": 10,  "mode": "round-half-up", "count": 0 }
+    ],
+    "record": {
+      "serverSeed": "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8091a2b3c4d5e6f70811223344556",
+      "drand": {
+        "round": 29286636,
+        "randomness": "e8d0543d60b639cf02775d16d8bc66f281b7bcbdf59706f29a1684889f8b9548"
+      },
+      "participants": [
+        "TICKET-0001","TICKET-0002","TICKET-0003","TICKET-0004","TICKET-0005",
+        "TICKET-0006","TICKET-0007","TICKET-0008","TICKET-0009","TICKET-0010",
+        "TICKET-0011","TICKET-0012","TICKET-0013","TICKET-0014","TICKET-0015",
+        "TICKET-0016","TICKET-0017","TICKET-0018","TICKET-0019","TICKET-0020"
+      ],
+      "prizePool": [
+        { "tier": "SEAT", "count": 5, "rule": { "num": 1, "den": 4, "mode": "round-half-up" } }
+      ]
+    },
+    "resolvedCount": 5,
+    "winners": [
+      { "rank": 1, "id": "TICKET-0002", "prize": "SEAT" },
+      { "rank": 2, "id": "TICKET-0012", "prize": "SEAT" },
+      { "rank": 3, "id": "TICKET-0001", "prize": "SEAT" },
+      { "rank": 4, "id": "TICKET-0005", "prize": "SEAT" },
+      { "rank": 5, "id": "TICKET-0006", "prize": "SEAT" }
+    ],
+    "negative": {
+      "count-mismatch": {
+        "description": "The proportional record with the SEAT tier's stated count changed to 6 (rule 1/4 round-half-up over 20 still resolves to 5).",
+        "expected": "REJECTED - a verifier MUST reject when the stated count != the rule-resolved count (uvLs 6.1 / 9.4)."
+      }
+    }
+  },
   "negative": {
     "duplicate-ids": {
       "description": "The canonical record's participants with 'TICKET-0007' appended a second time (21 entries, one duplicate).",

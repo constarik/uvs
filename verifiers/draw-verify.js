@@ -63,9 +63,47 @@ function lookup(participants, combined, id, prizes) {
   return { id, present, rank, prize: present && rank <= prizes.length ? prizes[rank - 1] : null, score: me };
 }
 
-// build the prize pool from a record: explicit `prizes`, or `winners` seats
+// §6.1 proportional pools: a tier's winner count derived from the participant count M as an
+// integer num/den with one rounding mode. All-integer (BigInt) so JS, Python, Java (long) and
+// C++ (int64) agree; operands are non-negative, so division is floor (no truncation ambiguity).
+function resolveCount(M, rule) {
+  const num = rule.num, den = rule.den, mode = rule.mode || 'round-half-up';
+  if (!Number.isInteger(num) || !Number.isInteger(den) || !Number.isInteger(M) || den <= 0 || num < 0 || M < 0)
+    throw new Error('INVALID: proportional num/den/M must be non-negative integers with den>0 (uvLs §6.1)');
+  const Mb = BigInt(M), n = BigInt(num), d = BigInt(den);
+  let c;
+  if (mode === 'floor') c = (Mb * n) / d;
+  else if (mode === 'ceil') c = (Mb * n + d - 1n) / d;
+  else if (mode === 'round-half-up') c = (2n * Mb * n + d) / (2n * d);
+  else throw new Error('INVALID: unknown rounding mode "' + mode + '" (uvLs §6.1)');
+  return Number(c);
+}
+
+// build the prize pool: explicit `prizes`; a §6 `prizePool` of {tier,count[,rule]} tiers
+// (proportional tiers carry a §6.1 rule); or `winners` seats.
 function poolOf(rec) {
   if (Array.isArray(rec.prizes)) return rec.prizes;
+  if (Array.isArray(rec.prizePool)) {
+    const M = rec.participants.length, prizes = [];
+    let total = 0;
+    for (const t of rec.prizePool) {
+      if (typeof t.tier !== 'string') throw new Error('INVALID: tier label must be a string (uvLs §6)');
+      let count;
+      if (t.rule) {
+        count = resolveCount(M, t.rule);
+        // §6.1/§9.4: a proportional tier carries both the rule and its resolved count; reject a mismatch.
+        if (t.count != null && t.count !== count)
+          throw new Error('INVALID: tier "' + t.tier + '" count ' + t.count + ' != rule-resolved ' + count + ' (uvLs §6.1)');
+      } else {
+        if (!Number.isInteger(t.count)) throw new Error('INVALID: tier count must be a JSON integer (uvLs §6.1)');
+        count = t.count;
+      }
+      if (total + count > M) count = M - total;   // §6.1 ordering: clamp running total to M
+      for (let k = 0; k < count; k++) prizes.push(t.tier);
+      total += count;
+    }
+    return prizes;
+  }
   const n = rec.winners || rec.N || 0;
   return Array.from({ length: n }, () => rec.prizeLabel || 'WIN');
 }
@@ -83,7 +121,7 @@ function checkAnchorRound(genTime, round) {
   return { ok: round === expectedRound && genTime < roundTime, expectedRound, roundTime, genBeforeRound: genTime < roundTime };
 }
 
-module.exports = { sha256, combinedSeed, scoreOf, permute, allocate, lookup, poolOf, roundAt, timeOfRound, checkAnchorRound };
+module.exports = { sha256, combinedSeed, scoreOf, permute, allocate, lookup, poolOf, resolveCount, roundAt, timeOfRound, checkAnchorRound };
 
 // ---- CLI ----
 if (require.main === module) {

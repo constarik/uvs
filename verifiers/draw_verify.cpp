@@ -36,6 +36,15 @@ bool checkAnchorRound(int64_t genTime, int64_t round) {
   return round == roundAt(genTime) + 1 && genTime < timeOfRound(round);
 }
 
+// §6.1 proportional pools: a tier count derived from M as an integer num/den with one rounding
+// mode. int64 arithmetic; operands are non-negative, so integer division is floor. Matches the
+// JS (BigInt) / Python / Java (long) verifiers.
+int64_t resolveCount(int64_t M, int64_t num, int64_t den, const string& mode) {
+  if (mode == "floor") return (M * num) / den;
+  if (mode == "ceil")  return (M * num + den - 1) / den;
+  return (2 * M * num + den) / (2 * den);   // round-half-up (default)
+}
+
 static const uint32_t K[64] = {
   0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,
   0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,
@@ -111,5 +120,13 @@ int main() {
   int64_t genTime = 1781155964LL, round = roundAt(genTime) + 1;
   printf("5.4 derived-R (genTime=%lld, R=%lld): %s\n", (long long)genTime, (long long)round,
          checkAnchorRound(genTime, round) ? "OK" : "FAIL");
+
+  // §6.1 proportional: 1-in-4 round-half-up over M=20 -> 5 SEATs (same as the explicit winners:5);
+  // plus the boundary cases from the spec worked example.
+  bool rp = resolveCount(20,1,4,"round-half-up")==5 && resolveCount(9,1,10,"round-half-up")==1
+            && resolveCount(9,1,10,"floor")==0 && resolveCount(9,1,10,"ceil")==1
+            && resolveCount(4,1,10,"round-half-up")==0 && resolveCount(15,1,10,"round-half-up")==2
+            && resolveCount(50,5,100,"round-half-up")==3 && resolveCount(1,1,10,"ceil")==1;
+  printf("6.1 proportional rounding: %s\n", rp ? "OK" : "FAIL");
   return 0;
 }
