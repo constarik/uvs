@@ -109,7 +109,7 @@ endpoints:  https://api.drand.sh/<chainHash>/public/<round>
             https://drand.cloudflare.com/<chainHash>/public/<round>
 ```
 
-`randomness` **MUST** be taken as the SHA-256 of the round's signature bytes (the beacon's own `randomness` field), and any verifier **MUST** be able to re-fetch the named round and confirm it.
+`randomness` **MUST** be taken as the SHA-256 of the round's signature bytes (the beacon's own `randomness` field), and any verifier **MUST** be able to re-fetch the named round and confirm it. `roundAt(t)` and `timeOfRound(r)` **MUST** be computed in exact integer arithmetic (floor division; the beacon constants above are integers), so round selection is byte-identical across languages (core §3).
 
 ### 4.2 Beacon failure and chain migration
 
@@ -168,7 +168,7 @@ There are two ways to bind the round:
   R = roundAt(genTime) + 1          # the first round strictly after the stamp
   ```
 
-  With two TSAs, use the **latest** token's `genTime` (`max`), so every token predates `R`.
+  With two TSAs, use the **latest** `genTime` among the tokens that **successfully verify** (§5.4) — `max` over verified tokens only — so every accepted token predates `R`.
 
 The derived form has three properties the explicit form lacks:
 
@@ -242,7 +242,7 @@ round-half-up : count = (2*M*num + den)    \ (2*den)     # DEFAULT
 ceil          : count = (M*num + den - 1)  \ den
 ```
 
-The mode **MUST** be declared in the rule and is part of the committed record. **round-half-up is the default**, because it is faithful to the stated odds: the expected number of winners is `M*num/den`, and rounding to the nearest integer represents it without bias. `floor` systematically *under-awards* — it discards the fractional expected winner, so "1 in 10" at `M=9` yields `0`; `ceil` guarantees at least one winner whenever `M ≥ 1`. Worked example, "1 in 10", round-half-up: `M=9 → 1`, `M=4 → 0`, `M=15 → 2`.
+All operands are non-negative, so integer division is floor — there is no truncation-direction ambiguity. An implementation **MUST** use integer types wide enough that `M*num` and `2*M*num + den` never overflow (64-bit suffices for `M`, `num` ≤ 10⁹; use arbitrary-precision integers beyond that), so a language with fixed-width integers reproduces the same count as one with unbounded integers (core §3). The mode **MUST** be declared in the rule and is part of the committed record; a `rule` with `mode` absent is resolved as `round-half-up` **by definition**, so reproducibility never rests on an undeclared fallback. The `rule` object is hashed as part of `prizePool` under Canonical JSON (core §5). **round-half-up is the default**, because it is faithful to the stated odds: the expected number of winners is `M*num/den`, and rounding to the nearest integer represents it without bias. `floor` systematically *under-awards* — it discards the fractional expected winner, so "1 in 10" at `M=9` yields `0`; `ceil` guarantees at least one winner whenever `M ≥ 1`. Worked example, "1 in 10", round-half-up: `M=9 → 1`, `M=4 → 0`, `M=15 → 2`.
 
 **Ordering and remainder.** Tiers resolve in declared order (best prize first). The running total of resolved counts **MUST NOT** exceed `M`; if rounding pushes the cumulative total past `M`, later tiers are clamped so the total is exactly `min(Σcount, M)`. Any remainder `M − Σcount` is the implicit "no-prize" outcome and **SHOULD** be declared as an explicit final tier, so the committed record states every outcome.
 
@@ -282,7 +282,7 @@ A uvLottery draw **SHOULD** publish a self-contained record sufficient for any t
 }
 ```
 
-The header (`commitment`, `drand` round, `branch: "uvLottery"`) follows core §6.2; the record is the replayable recipe (core §6.1). `commitmentAnchor` carries the §5.4 evidence and is **REQUIRED** for a record claiming 🟢 (`lowerBoundRound` is the optional `R_c`).
+The header (`commitment`, `drand` round, `branch: "uvLottery"`) follows core §6.2 and is carried as the **enclosing envelope** of this record — the `rules`/`result` object below is the recipe the header transports (core §6.1), not a place where the header fields are duplicated. `commitmentAnchor` carries the §5.4 evidence and is **REQUIRED** for a record claiming 🟢 (`lowerBoundRound` is the optional `R_c`).
 
 A **proportional** tier (§6.1) additionally carries a `rule` object alongside its resolved `count`, e.g. `{ "tier": "SEAT", "count": 50, "rule": { "num": 1, "den": 10, "mode": "round-half-up" } }`; the verifier recomputes `count` from `rule` and the committed participant count and rejects a mismatch.
 
