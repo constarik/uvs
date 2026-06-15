@@ -1,0 +1,75 @@
+{
+  "_about": "uvGacha reference test vectors. Each `record` is a replayable recipe (uvGacha §7); a conforming resolver MUST reproduce the listed outcomes byte-for-byte. rateDenominator D=1000000 (ppm); rates sum to exactly D (uvGacha §4).",
+  "stateless": {
+    "description": "A stateless drop table (5star 0.6%, 4star 9.1%, 3star 90.3%), 10 pulls, instant profile (no drand -> tier ceiling 🟡).",
+    "record": {
+      "serverSeed": "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8091a2b3c4d5e6f70811223344556",
+      "clientSeed": "uvs-gacha-demo",
+      "drand": null,
+      "rateDenominator": 1000000,
+      "rules": {
+        "tiers": [
+          { "tier": "5star", "rate": 6000 },
+          { "tier": "4star", "rate": 91000 },
+          { "tier": "3star", "rate": 903000 }
+        ]
+      },
+      "pullCount": 10
+    },
+    "combinedSeed": "91d696b5dd3f9634d7015b321685ae61ac3a52eb4cf540cf11d5a1a2cc561043",
+    "tiers": ["4star", "3star", "3star", "3star", "3star", "3star", "3star", "3star", "3star", "3star"]
+  },
+  "pity": {
+    "description": "Same drop table plus a §5 example hard-pity machine: a guaranteed 5star on the 10th consecutive pull without one (hardAfter=10). 12 pulls. Pull 10 is FORCED by pity; the miss counter is reconstructed by replay from pull 1, never stored (core §6.1).",
+    "record": {
+      "serverSeed": "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8091a2b3c4d5e6f70811223344556",
+      "clientSeed": "uvs-gacha-pity",
+      "drand": null,
+      "rateDenominator": 1000000,
+      "rules": {
+        "tiers": [
+          { "tier": "5star", "rate": 6000 },
+          { "tier": "4star", "rate": 91000 },
+          { "tier": "3star", "rate": 903000 }
+        ],
+        "pity": { "tier": "5star", "hardAfter": 10 }
+      },
+      "pullCount": 12
+    },
+    "combinedSeed": "fa753fc5786340d20b5857a90736473fb4360f55d2e4a9a3eed6f36909710cdf",
+    "pulls": [
+      { "i": 1,  "tier": "3star", "forced": false },
+      { "i": 2,  "tier": "3star", "forced": false },
+      { "i": 3,  "tier": "3star", "forced": false },
+      { "i": 4,  "tier": "3star", "forced": false },
+      { "i": 5,  "tier": "3star", "forced": false },
+      { "i": 6,  "tier": "3star", "forced": false },
+      { "i": 7,  "tier": "3star", "forced": false },
+      { "i": 8,  "tier": "3star", "forced": false },
+      { "i": 9,  "tier": "3star", "forced": false },
+      { "i": 10, "tier": "5star", "forced": true  },
+      { "i": 11, "tier": "4star", "forced": false },
+      { "i": 12, "tier": "3star", "forced": false }
+    ]
+  },
+  "negative": {
+    "rates-not-sum-D": {
+      "description": "Rates 6000 + 91000 + 900000 = 997000, which is not D=1000000.",
+      "expected": "REJECTED - a verifier MUST reject a ruleset whose rates do not sum to exactly D (uvGacha §4).",
+      "record": {
+        "serverSeed": "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8091a2b3c4d5e6f70811223344556",
+        "clientSeed": "uvs-gacha-demo",
+        "drand": null,
+        "rateDenominator": 1000000,
+        "rules": {
+          "tiers": [
+            { "tier": "5star", "rate": 6000 },
+            { "tier": "4star", "rate": 91000 },
+            { "tier": "3star", "rate": 900000 }
+          ]
+        },
+        "pullCount": 5
+      }
+    }
+  }
+}
