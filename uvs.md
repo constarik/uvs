@@ -157,12 +157,13 @@ Every record begins with a header. Core-mandatory fields:
 }
 ```
 
-Branches extend this header with their own fields (e.g. `gameMode`/`granularity` in uvGame; `drand`/`pool` in uvLottery). Unknown fields **MUST** be preserved by tooling, not dropped.
+Branches extend this header with their own fields (e.g. `gameMode`/`granularity` in uvGame; `drand`/`pool` in uvLottery). Unknown fields are inert metadata: they **MUST** be preserved by tooling, not dropped, **MUST NOT** be inputs to the recipe (§6.1), and therefore **MUST NOT** affect verification of the outcome.
 
 ### 6.3 Storage requirements
 
 - **MUST** be append-only.
 - **MUST** be tamper-evident (any alteration is detectable by recomputation from the recipe).
+- Append-only storage does **not** by itself detect **truncation** (silent removal of trailing records); truncation-detection requires the §10.2(2) trail-immutability anchor, which commits the trail's hash **and length** to a public medium.
 - Recommended format: JSONL (one JSON object per line); implementations **SHOULD** chunk large trails.
 - Compression (gzip, zstd) and delta-encoding of repetitive inputs **MAY** be used, provided a documented expansion procedure restores the exact verifiable input.
 
@@ -231,7 +232,7 @@ An anchor being *present* does not by itself grant the top tier. There are three
 
 1. **Notary** — a finished record is bound to a public beacon round (a timestamp). Proves *when*, not *unriggability*.
 2. **Trail-immutability** — the record's hash and length are committed to a public append-only medium (beacon, transparency log, chain), so the trail cannot be silently rewritten.
-3. **Outcome-binding** — the outcome's seed derives from a beacon round that **did not exist at commit time**, so it could not have been pre-selected. This is the strongest anti-grinding guarantee — but it is only as strong as the proof that the commitment actually preceded the round. Outcome-binding therefore **MUST** be accompanied by operator-independent evidence that the commitment existed before the named round published (an append-only-medium inclusion or a neutral-registry timestamp; normative procedure in uvLs §5.4). A future-round reference whose commitment time rests on the operator's word classifies as a notary claim at best.
+3. **Outcome-binding** — the outcome's seed derives from a beacon round that **did not exist at commit time**, so it could not have been pre-selected. This is the strongest anti-grinding guarantee — but it is only as strong as the proof that the commitment actually preceded the round. Outcome-binding therefore **MUST** be accompanied by operator-independent evidence that the commitment existed before the named round published (an append-only-medium inclusion or a neutral-registry timestamp; the evidence **MUST** be machine-verifiable and publicly fetchable, with the concrete format defined by the branch — normative procedure in uvLs §5.4). A future-round reference whose commitment time rests on the operator's word classifies as a notary claim at best.
 
 A result is classified by the *strongest* anchor it actually carries, verified — never by the mere mention of one.
 
