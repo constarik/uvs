@@ -217,6 +217,22 @@ Three controls narrow the residuals; all are operational or legal, **not** crypt
 
 A draw **MAY** omit §5.5 entirely; its outcome tier (§8) is unaffected. Where §5.5 is used, the residuals above **MUST** be stated to the operator and **SHOULD** be surfaced to participants, so the guarantee is not oversold.
 
+### 5.6 Entry integrity — phantom and dropped participants (OPTIONAL — input-integrity axis)
+
+§5.5 binds the *prizes*; it does not make the *participant list* honest. UVS commits the list publicly, immutably, and with a proven timestamp — but it cannot, on its own, tell a genuine entrant from a **phantom** the operator inserted, nor detect a genuine entrant the operator **dropped**. This is the input-honesty boundary (§11); the proportional rules of §6.1 do **not** address it (padding the list changes *how many* win, not whether the entries are real).
+
+Two failure modes:
+
+- **Padding** — the operator adds entries it controls (sells 50 tickets, commits 90). Real entrants' odds are diluted and a share of the prizes returns to the operator.
+- **Omission** — the operator drops a real entrant from the committed list.
+
+**Self-signed receipts do not help.** A receipt the operator signs with its own key constrains nothing — it can mint one for every phantom. Entry integrity is only narrowed by a **neutral attestation the operator cannot forge**:
+
+- For **paid draws** — a per-sale attestation from a neutral party (the payment processor, or a neutral registry) binding the sale to the entry, recorded as a **commitment/hash, never the buyer's personal data** (privacy). A phantom entry then has no valid attestation, so **padding** is detectable; and each buyer, holding their own attestation, confirms the committed list **contains** their entry, so **omission** is detectable.
+- For **allocations** (no sale — housing, visas, school places) — the equivalent attestation is eligibility/identity, issued by the authority that runs the allocation, not by the operator.
+
+**Honest limits.** This **shifts** trust to a neutral attester; it does not remove it. It requires integration and is proportionate to high-stakes or regulated draws — overkill for a small raffle. Where no neutral attester exists, entry integrity rests on the operator's own billing/KYC and the §5.5 contractual controls, **not** on cryptography. UVS's guarantee is unchanged: the draw is fair *on the committed entries*; whether those entries are real is this separate, optional layer.
+
 ---
 
 ## 6. The Prize Pool
@@ -351,7 +367,7 @@ Beyond the shared core threats (`uvs.md` §12), uvLottery specifically prevents 
 
 **Not prevented (out of crypto scope)**
 
-- **Input dishonesty** — phantom participants, or a published pool that differs from what entrants were promised, will still *verify* mathematically. Guarding inputs requires the participant list and pool to be **publicly committed before** the draw (§5.2); that pre-commitment, not the hash, is what closes this gap. Binding the pool to the *moment of sale* (not merely before the draw) is addressed separately in §5.5, which also names the residual **display** and **channel** limits that no cryptographic step removes.
+- **Input dishonesty** — phantom participants, or a published pool that differs from what entrants were promised, will still *verify* mathematically. Guarding inputs requires the participant list and pool to be **publicly committed before** the draw (§5.2); that pre-commitment, not the hash, is what closes this gap. Binding the pool to the *moment of sale* (not merely before the draw) is addressed separately in §5.5, which also names the residual **display** and **channel** limits that no cryptographic step removes. Phantom or dropped **participants** (entries that do not correspond to a real sale or eligibility) are the other half of this boundary; §5.6 describes the optional neutral-attestation layer that narrows it.
 - **Notary-only weakness** — a draw bound only as a notary (§5.3) is grindable and **MUST NOT** be presented as 🟢.
 - **Off-chain identity / eligibility** — who is allowed to hold a ticket (KYC, one-per-person) is the operator's domain, not UVS's.
 - **Cryptographic breaks** — inherits the security of SHA-256 and drand.
