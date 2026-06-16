@@ -32,6 +32,8 @@
  .trow{display:flex;gap:8px;align-items:center;margin-bottom:7px}
  .trow input.lbl{flex:1}
  .trow input.cnt{width:90px}
+ .trow select.mode{width:122px;cursor:pointer}
+ .trow input.val{width:72px}
  .smallbtn{border:1px solid var(--line);background:#11151b;color:var(--dim);border-radius:8px;padding:7px 10px;cursor:pointer;font:inherit;font-size:13px}
  .row3{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
  .row3 select{flex:1;min-width:150px;cursor:pointer}
@@ -130,16 +132,25 @@ function iso(t){ return new Date(t*1000).toISOString().replace('T',' ').replace(
 
 /* ---- prize tiers (Phase 0) ---- */
 function addTier(label,count){ var d=document.createElement('div'); d.className='trow';
-  d.innerHTML='<input class="lbl" placeholder="prize label (e.g. Grand)"><input class="cnt" type="number" min="1" placeholder="count"><button class="smallbtn rm">✕</button>';
-  d.querySelector('.lbl').value=label||''; if(count) d.querySelector('.cnt').value=count;
+  d.innerHTML='<input class="lbl" placeholder="prize label (e.g. Grand)">'+
+    '<select class="mode"><option value="count">winners</option><option value="pct">% of entrants</option><option value="inN">1 in N</option></select>'+
+    '<input class="val" type="number" min="1" placeholder="n">'+
+    '<button class="smallbtn rm">✕</button>';
+  d.querySelector('.lbl').value=label||''; if(count) d.querySelector('.val').value=count;
   d.querySelector('.rm').onclick=function(){ d.remove(); refreshPool(); };
-  d.querySelector('.lbl').addEventListener('input',refreshPool); d.querySelector('.cnt').addEventListener('input',refreshPool);
+  d.querySelectorAll('input,select').forEach(function(el){ el.addEventListener('input',refreshPool); el.addEventListener('change',refreshPool); });
   $('tiers').appendChild(d); refreshPool(); }
 $('addTier').onclick=function(){ addTier('',''); };
 function poolRows(){ var out=[]; document.querySelectorAll('#tiers .trow').forEach(function(d){
-  var l=d.querySelector('.lbl').value.trim(), c=parseInt(d.querySelector('.cnt').value)||0; if(l&&c>0) out.push({tier:l,count:c}); }); return out; }
-function refreshPool(){ var pool=poolRows(), sum=pool.reduce(function(a,t){return a+t.count;},0);
-  $('poolInfo').textContent = pool.length? (pool.length+' tier(s), '+sum+' prize(s) total — top '+sum+' of the seeded order win, in this order') : 'add at least one prize tier'; }
+  var l=d.querySelector('.lbl').value.trim(), mode=d.querySelector('.mode').value, v=parseInt(d.querySelector('.val').value)||0;
+  if(!l||v<=0) return;
+  if(mode==='count') out.push({tier:l,count:v});
+  else if(mode==='pct') out.push({tier:l,rule:{num:v,den:100,mode:'round-half-up'}});
+  else if(mode==='inN') out.push({tier:l,rule:{num:1,den:v,mode:'round-half-up'}});
+}); return out; }
+function describeTier(t){ if(t.count!=null) return t.tier+': '+t.count; if(t.rule.num===1) return t.tier+': 1 in '+t.rule.den; return t.tier+': '+t.rule.num+'%'; }
+function refreshPool(){ var pool=poolRows();
+  $('poolInfo').innerHTML = pool.length? ('top of the seeded order win, in order — '+pool.map(describeTier).join(' · ')+'  <span style="color:#6b7686">(% and 1-in-N resolve to a count at Close, from the actual entrants — §6.1 round-half-up)</span>') : 'add at least one prize tier'; }
 
 /* ---- participants (Phase 1) ---- */
 function parts(){ return $('parts').value.split('\n').map(function(s){return s.trim();}).filter(function(s){return s.length;}); }
