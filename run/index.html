@@ -248,7 +248,7 @@ $('goClose').onclick=async function(){
   $('goClose').disabled=true; ['winCard','jsonBox'].forEach(function(id){$(id).style.display='none';});
   $('closeStatus').innerHTML='Committing the entrants + timestamping at ×2 RFC-3161 TSAs…';
   var c;
-  try{ var r=await fetch(BACKEND+'/close',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({drawId:drawId,participants:p,delaySeconds:delaySeconds()})}); c=await r.json(); if(!r.ok) throw new Error(c.error||'close failed'); }
+  try{ var r=await fetch(BACKEND+'/close',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({drawId:drawId,participants:p,delaySeconds:delaySeconds(),declaredCount:parseInt($('expCount').value)})}); c=await r.json(); if(!r.ok) throw new Error(c.error||'close failed'); }
   catch(e){ $('closeStatus').innerHTML='<span class="err">close failed: '+e.message+'</span>'; $('goClose').disabled=false; return; }
   sess=c.sessionId; roundTime=c.roundTime;
   var tokens=(c.commitmentAnchor&&c.commitmentAnchor.tokens)||[];
