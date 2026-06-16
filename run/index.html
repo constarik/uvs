@@ -90,7 +90,8 @@
     <div class="kv"><b>drawId</b></div>
     <input id="drawId" placeholder="paste a drawId from a previous Open" style="font-family:ui-monospace,monospace">
     <textarea id="parts" placeholder="One entry id per line:&#10;TICKET-0001&#10;TICKET-0002&#10;alice@example.com" style="margin-top:10px"></textarea>
-    <div class="genrow">or generate <input id="genN" type="number" min="1" value="100"> tickets, prefix <input id="genPfx" class="pfx" value="TICKET-"> <button class="smallbtn" id="genBtn">fill</button></div>
+    <div class="mut">Paste your <b>sold-ticket list</b> from your own system — one entry id per line. Entrants are real buyers; you never invent them.</div>
+    <div class="genrow" id="genRow" style="display:none">demo data: generate <input id="genN" type="number" min="1" value="100"> tickets, prefix <input id="genPfx" class="pfx" value="TICKET-"> <button class="smallbtn" id="genBtn">fill</button></div>
     <div class="mut" id="partsInfo">0 entries</div>
     <div class="row3">
       <select id="delay">
@@ -238,6 +239,7 @@ function renderWinners(rec){
 }
 
 /* init */
+if (new URLSearchParams(location.search).has('demo')) { var _g=$('genRow'); if(_g) _g.style.display=''; }  // demo-only: ?demo reveals the test-data generator
 addTier('Grand',1); refreshParts();
 </script>
 </body>
