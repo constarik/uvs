@@ -83,10 +83,14 @@ function resolveCount(M, rule) {
 // (proportional tiers carry a §6.1 rule); or `winners` seats.
 function poolOf(rec) {
   if (Array.isArray(rec.prizes)) return rec.prizes;
-  if (Array.isArray(rec.prizePool)) {
+  if (rec.rules && Array.isArray(rec.rules.prizes)) return rec.rules.prizes;
+  // a published draw record nests the pool under `rules` (uvLs §7); accept either shape.
+  const pp = Array.isArray(rec.prizePool) ? rec.prizePool
+           : (rec.rules && Array.isArray(rec.rules.prizePool) ? rec.rules.prizePool : null);
+  if (pp) {
     const M = rec.participants.length, prizes = [];
     let total = 0;
-    for (const t of rec.prizePool) {
+    for (const t of pp) {
       if (typeof t.tier !== 'string') throw new Error('INVALID: tier label must be a string (uvLs §6)');
       let count;
       if (t.rule) {
@@ -104,8 +108,9 @@ function poolOf(rec) {
     }
     return prizes;
   }
-  const n = rec.winners || rec.N || 0;
-  return Array.from({ length: n }, () => rec.prizeLabel || 'WIN');
+  const r = rec.rules || {};
+  const n = rec.winners || rec.N || r.winners || r.N || 0;
+  return Array.from({ length: n }, () => rec.prizeLabel || r.prizeLabel || 'WIN');
 }
 
 // ── §5.4 anchor round rule (optional) ────────────────────────────────────────

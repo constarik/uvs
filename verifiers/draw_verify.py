@@ -66,9 +66,13 @@ def resolve_count(M, rule):
 
 def pool_of(rec):
     if isinstance(rec.get('prizes'), list): return rec['prizes']
-    if isinstance(rec.get('prizePool'), list):
+    r = rec.get('rules') or {}
+    if isinstance(r.get('prizes'), list): return r['prizes']
+    # a published draw record nests the pool under `rules` (uvLs 7); accept either shape.
+    pp = rec['prizePool'] if isinstance(rec.get('prizePool'), list) else (r['prizePool'] if isinstance(r.get('prizePool'), list) else None)
+    if pp is not None:
         M, prizes, total = len(rec['participants']), [], 0
-        for t in rec['prizePool']:
+        for t in pp:
             if not isinstance(t.get('tier'), str):
                 raise ValueError('INVALID: tier label must be a string (uvLs 6)')
             if t.get('rule') is not None:
@@ -83,8 +87,8 @@ def pool_of(rec):
             prizes.extend([t['tier']] * count)
             total += count
         return prizes
-    n = rec.get('winners') or rec.get('N') or 0
-    return [rec.get('prizeLabel', 'WIN')] * n
+    n = rec.get('winners') or rec.get('N') or r.get('winners') or r.get('N') or 0
+    return [rec.get('prizeLabel') or r.get('prizeLabel') or 'WIN'] * n
 
 # -- §5.4 anchor round rule (optional) --
 # drand quicknet: 3s period, genesis 1692803367. The DERIVED-R rule (uvLs 5.4.1) sets

@@ -132,7 +132,8 @@ public class DrawVerify {
     static List<String> poolOf(Map<String, Object> rec) {
         Object p = rec.get("prizes");
         if (p instanceof List) { List<String> out = new ArrayList<>(); for (Object x : (List<Object>) p) out.add(String.valueOf(x)); return out; }
-        Object pp = rec.get("prizePool");
+        Map<String, Object> rl = rec.get("rules") instanceof Map ? (Map<String, Object>) rec.get("rules") : new HashMap<>();
+        Object pp = rec.get("prizePool") instanceof List ? rec.get("prizePool") : rl.get("prizePool");   // a published record nests the pool under `rules` (uvLs §7)
         if (pp instanceof List) {
             long M = ((List<Object>) rec.get("participants")).size();
             List<String> out = new ArrayList<>(); long total = 0;
@@ -154,8 +155,9 @@ public class DrawVerify {
             }
             return out;
         }
-        long n = rec.get("winners") instanceof Long ? (Long) rec.get("winners") : (rec.get("N") instanceof Long ? (Long) rec.get("N") : 0L);
-        String label = rec.get("prizeLabel") != null ? String.valueOf(rec.get("prizeLabel")) : "WIN";
+        Object wo = rec.get("winners") instanceof Long ? rec.get("winners") : (rec.get("N") instanceof Long ? rec.get("N") : (rl.get("winners") instanceof Long ? rl.get("winners") : rl.get("N")));
+        long n = wo instanceof Long ? (Long) wo : 0L;
+        String label = rec.get("prizeLabel") != null ? String.valueOf(rec.get("prizeLabel")) : (rl.get("prizeLabel") != null ? String.valueOf(rl.get("prizeLabel")) : "WIN");
         List<String> out = new ArrayList<>(); for (long k = 0; k < n; k++) out.add(label); return out;
     }
 
