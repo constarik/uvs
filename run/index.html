@@ -89,8 +89,15 @@
     <p class="sub">Same <b>drawId</b> (from step 1, or paste one to resume a sale you opened earlier). Prizes are loaded from the attested rules — you can't change them here.</p>
     <div class="kv"><b>drawId</b></div>
     <input id="drawId" placeholder="paste a drawId from a previous Open" style="font-family:ui-monospace,monospace">
-    <textarea id="parts" placeholder="One entry id per line:&#10;TICKET-0001&#10;TICKET-0002&#10;alice@example.com" style="margin-top:10px"></textarea>
-    <div class="mut">Paste your <b>sold-ticket list</b> from your own system — one entry id per line. Entrants are real buyers; you never invent them.</div>
+    <textarea id="parts" placeholder="One entry id per line, or a comma list, or a CSV (id = first column):&#10;TICKET-0001&#10;TICKET-0002&#10;alice@example.com" style="margin-top:10px"></textarea>
+    <div class="mut">Paste your <b>sold-ticket list</b> from your own system — one id per line, a comma list, or a CSV (id = first column; header auto-skipped). Entrants are real buyers; you never invent them.</div>
+    <div class="genrow">
+      <input type="file" id="csvFile" accept=".csv,.txt,text/plain,text/csv" style="display:none">
+      <button class="smallbtn" id="csvBtn">📄 Load CSV / TXT</button>
+      <span style="color:#3a4456">·</span>
+      <input id="srcUrl" placeholder="…or fetch from a URL (GET)" style="flex:1;min-width:150px">
+      <button class="smallbtn" id="fetchBtn">fetch</button>
+    </div>
     <div class="genrow" id="genRow" style="display:none">demo data: generate <input id="genN" type="number" min="1" value="100"> tickets, prefix <input id="genPfx" class="pfx" value="TICKET-"> <button class="smallbtn" id="genBtn">fill</button></div>
     <div class="mut" id="partsInfo">0 entries</div>
     <div class="row3">
@@ -154,10 +161,49 @@ function refreshPool(){ var pool=poolRows();
   $('poolInfo').innerHTML = pool.length? ('top of the seeded order win, in order — '+pool.map(describeTier).join(' · ')+'  <span style="color:#6b7686">(% and 1-in-N resolve to a count at Close, from the actual entrants — §6.1 round-half-up)</span>') : 'add at least one prize tier'; }
 
 /* ---- participants (Phase 1) ---- */
-function parts(){ return $('parts').value.split('\n').map(function(s){return s.trim();}).filter(function(s){return s.length;}); }
-function refreshParts(){ var p=parts(), set={}, dup=0; p.forEach(function(x){ if(set[x]) dup++; set[x]=1; });
-  $('partsInfo').innerHTML = p.length+' entries'+(dup?' · <span style="color:var(--gold)">'+dup+' duplicate(s) — ids must be unique (uvLs §3.1)</span>':''); }
+// Parse entrants from any of: one-per-line (CR/LF/CRLF), comma/semicolon/tab list, or CSV (id = first column).
+// Returns unique non-empty ids + counts of blanks / duplicates / invalid (control chars). uvLs §3.1: ids must be unique & non-empty.
+function parseEntries(raw){
+  var res={ids:[],blanks:0,dups:0,invalid:0,dupList:[],invalidList:[]};
+  if(!raw) return res;
+  var lines=raw.split(/\r\n|\r|\n/);
+  var nonEmpty=lines.filter(function(l){return l.trim().length;});
+  var tokens=[];
+  if(nonEmpty.length>1){ for(var i=0;i<lines.length;i++){ if(!lines[i].trim())continue; tokens.push(lines[i].split(/[,;\t]/)[0]); } }  // multi-row -> first column per row (CSV)
+  else { tokens=lines.join(' ').split(/[,;\t]+/); }                                                                                   // single row -> comma/semicolon/tab list
+  // auto-skip a header row: first cell has no digit and looks like a column name
+  var h0=(tokens[0]||'').trim().replace(/^["']+|["']+$/g,'');
+  if(h0 && !/\d/.test(h0) && /(^|[\s_])(id|ids|ticket|ticketid|entry|entries|email|e-?mail|number)([\s_]|$)/i.test(h0)) tokens.shift();
+  var seen={};
+  for(var k=0;k<tokens.length;k++){
+    var v=tokens[k].trim().replace(/^["']+|["']+$/g,'').trim();   // strip stray CSV quotes
+    if(!v){ res.blanks++; continue; }
+    if(/[ -]/.test(v)){ res.invalid++; if(res.invalidList.length<6) res.invalidList.push(v); continue; }
+    if(seen[v]){ res.dups++; if(res.dupList.length<8) res.dupList.push(v); continue; }
+    seen[v]=1; res.ids.push(v);
+  }
+  return res;
+}
+function parts(){ return parseEntries($('parts').value).ids; }
+function refreshParts(){
+  var r=parseEntries($('parts').value);
+  var msg='<b>'+r.ids.length+'</b> valid entr'+(r.ids.length===1?'y':'ies'), warn=[];
+  if(r.blanks)  warn.push(r.blanks+' blank skipped');
+  if(r.dups)    warn.push('<span style="color:var(--gold)">'+r.dups+' duplicate removed</span>'+(r.dupList.length?' ('+r.dupList.slice(0,4).join(', ')+(r.dups>4?'…':'')+')':''));
+  if(r.invalid) warn.push('<span style="color:var(--red)">'+r.invalid+' invalid (control chars) dropped</span>');
+  $('partsInfo').innerHTML = msg + (warn.length? ' · '+warn.join(' · ') : (r.ids.length? ' · <span class="ok">clean ✓</span>':''));
+}
 $('parts').addEventListener('input',refreshParts);
+$('csvBtn').onclick=function(){ $('csvFile').click(); };
+$('csvFile').onchange=function(e){ var f=e.target.files&&e.target.files[0]; if(!f) return; var rd=new FileReader();
+  rd.onload=function(){ $('parts').value=String(rd.result||''); refreshParts(); }; rd.readAsText(f); };
+$('fetchBtn').onclick=async function(){ var u=$('srcUrl').value.trim(); if(!u) return;
+  $('partsInfo').textContent='fetching…';
+  try{ var resp=await fetch(u); var t=await resp.text(), txt=t;
+    try{ var j=JSON.parse(t); if(Array.isArray(j)) txt=j.map(function(x){return typeof x==='string'?x:(x&&(x.id||x.ticket||x.email||''));}).join('\n'); }catch(_){}
+    $('parts').value=txt; refreshParts();
+  }catch(e){ $('partsInfo').innerHTML='<span style="color:var(--red)">fetch failed: '+e.message+' — the source URL must allow CORS</span>'; }
+};
 $('genBtn').onclick=function(){ var n=Math.max(1,parseInt($('genN').value)||0), pfx=$('genPfx').value, pad=String(n).length, a=[];
   for(var i=1;i<=n;i++) a.push(pfx+String(i).padStart(pad,'0')); $('parts').value=a.join('\n'); refreshParts(); };
 $('delay').onchange=function(){ $('delayMin').style.display=this.value==='custom'?'block':'none'; };
