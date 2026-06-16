@@ -1,0 +1,55 @@
+<!doctype html><html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>UVS — opened-draws ledger</title>
+<style>
+:root{--bg:#0e1116;--card:#161b22;--ln:#222a35;--fg:#e6edf3;--mut:#8b949e;--gold:#d8a657;--red:#e5534b;--ok:#3fb950;--lnk:#58a6ff}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 system-ui,Segoe UI,Roboto,sans-serif}
+.wrap{max-width:920px;margin:0 auto;padding:28px 18px}
+h1{font-size:22px;margin:0 0 4px}.sub{color:var(--mut);margin:0 0 18px}
+.card{background:var(--card);border:1px solid var(--ln);border-radius:12px;padding:16px;margin-bottom:14px}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--ln);vertical-align:top}
+th{color:var(--mut);font-weight:600}
+.pill{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;font-weight:600}
+.open{background:rgba(216,166,87,.15);color:var(--gold)}.closed{background:rgba(63,185,80,.15);color:var(--ok)}
+.stale{background:rgba(229,83,75,.15);color:var(--red)}
+a{color:var(--lnk);text-decoration:none}a:hover{text-decoration:underline}
+.mono{font-family:ui-monospace,Menlo,Consolas,monospace}
+.mut{color:var(--mut)}.tot{display:flex;gap:18px;margin:0 0 14px;flex-wrap:wrap}
+.tot b{font-size:20px}.foot{color:var(--mut);font-size:13px;margin-top:18px}
+</style></head><body><div class="wrap">
+<h1>Opened-draws ledger</h1>
+<p class="sub">Every draw is listed here the moment it is <span class="mono">/open</span>ed &mdash; before any tickets are sold. An entry that stays <span class="pill open">open</span> and never becomes <span class="pill closed">closed</span> is a draw that was started and abandoned. This makes <i>selective publication</i> (open many, reveal only the convenient one) a visible anomaly. <span class="mut">uvLottery &sect;5.6</span></p>
+<div class="tot" id="tot"></div>
+<div class="card"><div id="body">Loading&hellip;</div></div>
+<p class="foot">Source: <span class="mono" id="src"></span> &middot; cross-check revealed results at <a id="drawsLink" target="_blank" rel="noopener">/draws</a>. A <span class="pill stale">abandoned?</span> tag = opened &gt; 1&nbsp;h ago and still not closed.</p>
+</div><script>
+var BACKEND=new URLSearchParams(location.search).get('backend')||'https://registrar.uncloned.work';
+document.getElementById('src').textContent=BACKEND+'/opens';
+document.getElementById('drawsLink').href=BACKEND+'/draws';
+function esc(s){return String(s==null?'':s).replace(/[&<>]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;'}[c];});}
+function prize(p){ if(!Array.isArray(p)) return '—';
+  return p.map(function(t){ if(t.count!=null) return esc(t.tier)+': '+t.count;
+    if(t.rule&&t.rule.num===1) return esc(t.tier)+': 1 in '+t.rule.den;
+    if(t.rule) return esc(t.tier)+': '+t.rule.num+'%'; return esc(t.tier); }).join(' · '); }
+(async function(){
+  try{
+    var r=await fetch(BACKEND+'/opens'); var d=await r.json(); if(!r.ok) throw new Error(d.error||'failed');
+    var items=d.items||[], now=Date.now()/1000;
+    document.getElementById('tot').innerHTML=
+      '<div><b>'+(d.count||0)+'</b> <span class="mut">opened</span></div>'+
+      '<div><b>'+(d.closed||0)+'</b> <span class="mut">closed</span></div>'+
+      '<div><b>'+(d.open||0)+'</b> <span class="mut">still open</span></div>';
+    if(!items.length){ document.getElementById('body').innerHTML='<span class="mut">No draws opened yet.</span>'; return; }
+    var rows=items.map(function(i){
+      var stale=i.status==='open' && i.openedAt && (now-i.openedAt>3600);
+      var pill=i.status==='closed'?'<span class="pill closed">closed</span>':(stale?'<span class="pill stale">abandoned?</span>':'<span class="pill open">open</span>');
+      return '<tr><td class="mono"><a href="'+BACKEND+'/draws/'+esc(i.drawId)+'" target="_blank" rel="noopener">'+esc(i.drawId)+'</a></td>'+
+        '<td>'+esc(i.label||'—')+'</td><td>'+prize(i.prizePool)+'</td>'+
+        '<td class="mut">'+esc((i.openedISO||'').replace('T',' ').replace(/\..+/,' UTC'))+'</td>'+
+        '<td>'+pill+'</td></tr>';
+    }).join('');
+    document.getElementById('body').innerHTML='<table><thead><tr><th>drawId</th><th>label</th><th>prizes</th><th>opened</th><th>status</th></tr></thead><tbody>'+rows+'</tbody></table>';
+  }catch(e){ document.getElementById('body').innerHTML='<span style="color:var(--red)">Could not load the ledger: '+esc(e.message)+'</span>'; }
+})();
+</script></body></html>

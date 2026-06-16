@@ -136,7 +136,7 @@ window.onerror=function(m,s,l,c,e){var b=document.getElementById('errbar');if(b)
 var $=function(id){return document.getElementById(id);};
 var BACKEND=new URLSearchParams(location.search).get('backend')||'https://registrar.uncloned.work';
 var SITE=location.origin.indexOf('uncloned.work')>=0?'uvs.uncloned.work':location.host;
-var sess=null, roundTime=0;
+var sess=null, roundTime=0, openedPool=null, openedDrawId=null, prizeWarnAck=false;
 function iso(t){ return new Date(t*1000).toISOString().replace('T',' ').replace('.000Z',' UTC'); }
 
 /* ---- prize tiers (Phase 0) ---- */
@@ -164,8 +164,12 @@ function refreshPool(){ var pool=poolRows();
 /* ---- participants (Phase 1) ---- */
 // Parse entrants from any of: one-per-line (CR/LF/CRLF), comma/semicolon/tab list, or CSV (id = first column).
 // Returns unique non-empty ids + counts of blanks / duplicates / invalid (control chars). uvLs §3.1: ids must be unique & non-empty.
+// fold for look-alike detection: NFKC + lowercase + strip spaces + map common Cyrillic/Greek homoglyphs to Latin.
+function fold(s){ s=String(s).normalize('NFKC').toLowerCase().replace(/\s+/g,'');
+  var map={'а':'a','е':'e','о':'o','р':'p','с':'c','у':'y','х':'x','к':'k','м':'m','т':'t','в':'b','н':'h','і':'i','ј':'j','ѕ':'s','ο':'o','ѵ':'v','ԁ':'d','ɡ':'g'};
+  var out=''; for(var i=0;i<s.length;i++) out+=(map[s[i]]||s[i]); return out; }
 function parseEntries(raw){
-  var res={ids:[],blanks:0,dups:0,invalid:0,dupList:[],invalidList:[]};
+  var res={ids:[],blanks:0,dups:0,invalid:0,dupList:[],invalidList:[],near:0,nearList:[]};
   if(!raw) return res;
   var lines=raw.split(/\r\n|\r|\n/);
   var nonEmpty=lines.filter(function(l){return l.trim().length;});
@@ -183,6 +187,12 @@ function parseEntries(raw){
     if(seen[v]){ res.dups++; if(res.dupList.length<8) res.dupList.push(v); continue; }
     seen[v]=1; res.ids.push(v);
   }
+  // soft near-duplicate pass (uvLs §5.6): case / space / Unicode-confusable look-alikes — likely the same
+  // entrant typed twice (or homoglyph padding). NOT removed (they may be genuinely distinct) — just flagged.
+  var fmap={};
+  for(var n=0;n<res.ids.length;n++){ var f=fold(res.ids[n]);
+    if(fmap[f]!==undefined && fmap[f]!==res.ids[n]){ res.near++; if(res.nearList.length<6) res.nearList.push(fmap[f]+' ≈ '+res.ids[n]); }
+    else if(fmap[f]===undefined){ fmap[f]=res.ids[n]; } }
   return res;
 }
 function parts(){ return parseEntries($('parts').value).ids; }
@@ -191,14 +201,16 @@ function refreshParts(){
   if(exp!==''){
     // blind cross-check: reveal only ✓/✗ against the operator's own figure — never the count, side, or size of any gap.
     if(r.dups||r.blanks||r.invalid){ $('partsInfo').innerHTML='<span style="color:var(--gold)">the list still has duplicates / blanks / junk — clean it before the cross-check</span>'; return; }
-    if(r.ids.length===(parseInt(exp)||-1)) $('partsInfo').innerHTML='<span class="ok">✓ your figure matches the list</span>';
-    else $('partsInfo').innerHTML='<span style="color:var(--red)">✗ your figure and the list don\'t agree — recheck both (the page won\'t say which side or by how much)</span>';
+    var nn = r.near? ' · <span style="color:var(--gold)">⚠ look-alike entries present — check for accidental doubles</span>':'';
+    if(r.ids.length===(parseInt(exp)||-1)) $('partsInfo').innerHTML='<span class="ok">✓ your figure matches the list</span>'+nn;
+    else $('partsInfo').innerHTML='<span style="color:var(--red)">✗ your figure and the list don\'t agree — recheck both (the page won\'t say which side or by how much)</span>'+nn;
     return;
   }
   var msg='<b>'+r.ids.length+'</b> valid entr'+(r.ids.length===1?'y':'ies'), warn=[];
   if(r.blanks)  warn.push(r.blanks+' blank skipped');
   if(r.dups)    warn.push('<span style="color:var(--gold)">'+r.dups+' duplicate removed</span>'+(r.dupList.length?' ('+r.dupList.slice(0,4).join(', ')+(r.dups>4?'…':'')+')':''));
   if(r.invalid) warn.push('<span style="color:var(--red)">'+r.invalid+' invalid (control chars) dropped</span>');
+  if(r.near)    warn.push('<span style="color:var(--gold)">⚠ '+r.near+' look-alike — possible double entry</span>'+(r.nearList.length?' ('+r.nearList.slice(0,3).join(', ')+(r.near>3?'…':'')+')':''));
   $('partsInfo').innerHTML = msg + (warn.length? ' · '+warn.join(' · ') : (r.ids.length? ' · <span class="ok">clean ✓</span>':''));
 }
 $('parts').addEventListener('input',refreshParts);
@@ -231,6 +243,7 @@ $('goOpen').onclick=async function(){
   $('tTicket').textContent='Draw #'+d.drawId;
   $('tLookup').innerHTML='Verify at '+SITE+'/d/'+d.drawId+'  <i>(human proof page — next build)</i> · raw record: registrar.uncloned.work/draws/'+d.drawId;
   $('openResult').style.display='block';
+  openedPool=pool; openedDrawId=d.drawId; prizeWarnAck=false;
   $('drawId').value=d.drawId; $('closeCard').classList.remove('off'); $('closeStatus').innerHTML='Rules attested. Add entrants and draw — now or after sales.';
   $('openStatus').innerHTML='<span class="ok">Opened.</span> Prizes are frozen and timestamped. Print the drawId on every ticket.';
   $('goOpen').disabled=false;
@@ -245,6 +258,9 @@ $('goClose').onclick=async function(){
   if(_exp===''){ $('closeStatus').innerHTML='<span class="err">Enter how many tickets you sold — the page cross-checks it against your list.</span>'; return; }
   if(_r.ids.length!==(parseInt(_exp)||-1)){ $('closeStatus').innerHTML='<span class="err">Your declared count and the list do not agree — reconcile both before drawing (the page won\'t say which side or by how much).</span>'; return; }
   var p=parts(); if(p.length<2){ $('closeStatus').innerHTML='<span class="err">Need at least 2 participants.</span>'; return; }
+  // soft-gate: more fixed prize slots than entrants (degenerate draw / wrong column pasted). Uses this session's opened pool.
+  if(openedDrawId===drawId && openedPool){ var fixed=0; openedPool.forEach(function(t){ if(t.count) fixed+=t.count; });
+    if(fixed>p.length){ if(!prizeWarnAck){ prizeWarnAck=true; $('closeStatus').innerHTML='<span style="color:var(--gold)">Heads-up: your tiers list more fixed winners ('+fixed+') than entrants ('+p.length+') — everyone wins and some prizes go unawarded. Check you pasted the right list, then click Close &amp; draw again to proceed.</span>'; return; } } else { prizeWarnAck=false; } }
   $('goClose').disabled=true; ['winCard','jsonBox'].forEach(function(id){$(id).style.display='none';});
   $('closeStatus').innerHTML='Committing the entrants + timestamping at ×2 RFC-3161 TSAs…';
   var c;
