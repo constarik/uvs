@@ -24,12 +24,19 @@ Lotteries, raffles, and allocations (housing, visas, school places, DAO distribu
 Slots, crash games, physics arcades, multiplayer. ChaCha20 keystream, commit-reveal with a player `clientSeed`, optional Protected layer (per-session WASM + Registrar). Reference: [PADDLA](https://paddla.uncloned.work). Move Sync (real-time multiplayer, signed moves) is a planned profile.
 
 ### → [**uvGacha Standard** — `uvGacha.md`](./uvGacha.md) · *sequential chance draws*
-Gacha banners, loot boxes, card packs: a sequence of pulls against published drop rates, optionally with stateful pity / guarantee systems. Chance-based like uvLottery, sequential and stateful like uvGame — it reuses the commit-reveal seed chain and proves the published odds were the odds applied. Reference resolver in [JavaScript, Python, Java, and C++](./verifiers) with stateless + hard-pity test vectors. Tier ceiling **🟡** for instant pulls, **🟢** for a batch bound to a future **drand** round.
+Gacha banners, loot boxes, card packs: a sequence of pulls against published drop rates, optionally with stateful pity / guarantee systems. Chance-based like uvLottery, sequential and stateful like uvGame — it reuses the commit-reveal seed chain and proves the published odds were the odds applied. Reference resolver in [JavaScript, Python, Java, and C++](./verifiers) with stateless + hard-pity test vectors. Tier ceiling **🟡** for instant pulls, **🟢** for a batch bound to a future **drand** round. **Live** — pull and recompute at [uvs.uncloned.work/gacha](https://uvs.uncloned.work/gacha).
 
 ### → [**UVS-core** — `uvs.md`](./uvs.md) · *the invariant*
 Determinism, canonical JSON, the Audit-Trail recipe format, reproducibility, version negotiation, and the derived **trust tiers** (🔴 unanchored / 🟡 notary / 🟢 outcome-bound).
 
 **Full index:** [SPEC.md](./SPEC.md) · **Archives:** [SPEC-v2.md](./SPEC-v2.md) (frozen v2 monolith), [SPEC-v1.md](./SPEC-v1.md).
+
+## Guides
+
+Plain step-by-step — no crypto background needed:
+
+- **Operators** — [run a verifiable draw](./guides/operator-lottery.md) · [run verifiable gacha](./guides/operator-gacha.md)
+- **Players** — [check your draw yourself](./guides/player-lottery.md) · [check your pulls yourself](./guides/player-gacha.md)
 
 ---
 
@@ -59,6 +66,7 @@ There is no "operator's version" of the result. There is one result, and anyone 
 | What | Branch | Link |
 |---|---|---|
 | Run a draw (live) | uvLottery | [uvs.uncloned.work/draw](https://uvs.uncloned.work/draw) |
+| Pull a gacha (live) | uvGacha | [uvs.uncloned.work/gacha](https://uvs.uncloned.work/gacha) |
 | PADDLA — physics arcade | uvGame | [paddla.uncloned.work](https://paddla.uncloned.work) |
 | Registrar — WASM seed + verify node | uvGame (Protected) | [registrar.uncloned.work](https://registrar.uncloned.work) |
 | Gacha resolver (reference, JS / Python / Java / C++) | uvGacha | [verifiers/gacha-resolve.js](./verifiers) |

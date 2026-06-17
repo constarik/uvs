@@ -10,7 +10,7 @@ Run a live draw: [uvs.uncloned.work/draw](https://uvs.uncloned.work/draw) · Ref
 
 > **Normative language.** **MUST**, **MUST NOT**, **SHOULD**, **MAY** per RFC 2119.
 
-> **Scope.** uvLottery is the UVS branch for **verifiable draws** — lotteries, raffles, loot-box / gacha pulls, and allocations (housing, visas, school places, DAO distributions). There is **no player and no interactive input**. The operation is: *honestly select from a fixed set according to publicly pre-committed rules.* Where uvGame asks "was this game played fairly?", uvLottery asks "was this draw drawn fairly?"
+> **Scope.** uvLottery is the UVS branch for **verifiable one-shot draws** — lotteries, raffles, and allocations (housing, visas, school places, DAO distributions), including a single sealed multi-prize deal. *(Repeated, **sequential** gacha / loot-box pulls against published drop rates are a different shape — that is the **uvGacha** branch, [`uvGacha.md`](./uvGacha.md). uvGacha cedes one-shot, single-permutation allocation to uvLottery; uvLottery cedes per-pull sampling to uvGacha.)* There is **no player and no interactive input**. The operation is: *honestly select from a fixed set according to publicly pre-committed rules.* Where uvGame asks "was this game played fairly?", uvLottery asks "was this draw drawn fairly?"
 >
 > A draw is **not** a mode of the game protocol: it has no `clientSeed` (the player's randomness contribution is replaced by a public beacon), it scores with SHA-256 (not a ChaCha20 keystream), and public randomness is **mandatory**. These are branch boundaries, not inconsistencies (core §2.1).
 

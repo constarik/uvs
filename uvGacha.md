@@ -15,6 +15,8 @@ Specification: [github.com/constarik/uvs](https://github.com/constarik/uvs) · S
 
 > **The discipline of this branch.** A gacha's specific mechanics — drop tables, soft/hard pity, 50/50 featured guarantees, multi-pull floors — are **unbounded** and operator-specific. This standard does **NOT** enumerate them. It fixes the **contract** (a committed, deterministic resolver replayed against committed entropy) and the **properties** that make any such resolver verifiable; particular mechanics live in the operator's committed ruleset and in test vectors, never in normative prose. This mirrors uvGame, which standardizes deterministic replay, not "physics."
 
+> **Status: LIVE.** Pull and recompute at [uvs.uncloned.work/gacha](https://uvs.uncloned.work/gacha) — in-browser 🟡, neutral commit-reveal 🟡 (notarized at ×2 RFC-3161), and a drand-bound 🟢 batch on the registrar (`/gacha/commit`, `/gacha/reveal`, `/gacha/commit-batch`). The four reference resolvers reproduce the live server's records byte-for-byte.
+
 ---
 
 ## Table of Contents
