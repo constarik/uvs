@@ -72,7 +72,13 @@ code{font-family:ui-monospace,monospace;background:#11151b;border:1px solid var(
   <h2><span class="step">2</span>Pull</h2>
   <div class="row"><label>clientSeed</label><input id="clientSeed" class="seed"><button class="smallbtn" id="randSeed">🎲</button></div>
   <div class="row"><label>pulls</label><input id="pullCount" class="s" type="number" min="1" max="300" value="10">
-    <span class="mut">serverSeed is generated fresh each pull and revealed below.</span></div>
+    <span class="mut">serverSeed is generated fresh and revealed below.</span></div>
+  <div class="row"><label>mode</label>
+    <select id="mode" style="flex:1;min-width:170px">
+      <option value="local">in-browser (honest 🟡)</option>
+      <option value="anchored">anchored — neutral commit-reveal (🟡 notary)</option>
+      <option value="batch">batch — drand-bound (🟢)</option>
+    </select></div>
   <button class="go" id="goPull">Pull ×<span id="goN">10</span></button>
   <div class="status" id="status">Set a drop table, then pull.</div>
   <div id="result" style="display:none">
@@ -94,6 +100,9 @@ code{font-family:ui-monospace,monospace;background:#11151b;border:1px solid var(
 window.onerror=function(m,s,l,c,e){var b=document.getElementById('errbar');if(b){b.style.display='block';b.textContent='⚠ '+((e&&e.message)||m)+' @'+l+':'+c;}return false;};
 var $=function(id){return document.getElementById(id);};
 var lastRecord=null;
+var BACKEND=new URLSearchParams(location.search).get('backend')||'https://registrar.uncloned.work';
+async function api(p,body){ var r=await fetch(BACKEND+p,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  var d=await r.json().catch(function(){return{};}); if(!r.ok) throw new Error((d&&d.error)||('HTTP '+r.status)); return d; }
 
 /* ---- reference resolver, byte-identical to verifiers/gacha-resolve.js ---- */
 async function sha256hex(str){
@@ -149,27 +158,46 @@ $('randSeed').onclick=function(){ $('clientSeed').value=randHex(8); };
 var TIERIDX={};
 function chipClass(tier){ if(!(tier in TIERIDX)) return 'r3'; var i=TIERIDX[tier]; return 'r'+Math.min(i,3); }
 
+function renderRecord(rec){
+  TIERIDX={}; rec.rules.tiers.forEach(function(x,i){ TIERIDX[x.tier]=i; });
+  $('pulls').innerHTML=rec.results.map(function(p){ return '<div class="chip '+chipClass(p.tier)+'">'+p.tier+(p.forced?'<span class="pity">pity</span>':'')+'<small>#'+p.i+'</small></div>'; }).join('');
+  var counts={}; rec.results.forEach(function(p){ counts[p.tier]=(counts[p.tier]||0)+1; });
+  $('tally').innerHTML='Tally: '+Object.keys(counts).map(function(k){return '<b>'+counts[k]+'</b> '+k;}).join(' · ');
+  $('cSeed').textContent=rec.combinedSeed||''; $('cCommit').textContent=(rec.commitment||'').slice(0,24)+'…'; $('cServer').textContent=(rec.serverSeed||'').slice(0,24)+'…';
+  lastRecord=rec; $('jsonPre').textContent=JSON.stringify(rec,null,2);
+  $('result').style.display='block'; $('jsonBox').style.display='block';
+}
 $('goPull').onclick=async function(){
   var t=tiers(), D=parseInt($('den').value)||0;
   try{ validateRules(t,D); }catch(e){ $('status').innerHTML='<span class="err">'+e.message+'</span>'; return; }
-  TIERIDX={}; t.forEach(function(x,i){ TIERIDX[x.tier]=i; });
   if(!$('clientSeed').value.trim()) $('clientSeed').value=randHex(8);
-  var rec={
-    branch:'uvGacha', commitment:'', serverSeed:randHex(32), clientSeed:$('clientSeed').value.trim(),
-    rateDenominator:D, rules:{ tiers:t }, pullCount:Math.max(1,Math.min(300,parseInt($('pullCount').value)||1)), results:[]
-  };
-  if($('pityOn').checked && $('pityTier').value) rec.rules.pity={ tier:$('pityTier').value, hardAfter:Math.max(1,parseInt($('pityN').value)||1) };
+  var mode=$('mode').value, cs=$('clientSeed').value.trim(), pc=Math.max(1,Math.min(300,parseInt($('pullCount').value)||1));
+  var rules={ tiers:t };
+  if($('pityOn').checked && $('pityTier').value) rules.pity={ tier:$('pityTier').value, hardAfter:Math.max(1,parseInt($('pityN').value)||1) };
   $('goPull').disabled=true; $('status').textContent='Resolving…';
   try{
-    rec.commitment=await sha256hex(rec.serverSeed);
-    var r=await resolve(rec); rec.results=r.results;
-    $('pulls').innerHTML=r.results.map(function(p){ return '<div class="chip '+chipClass(p.tier)+'">'+p.tier+(p.forced?'<span class="pity">pity</span>':'')+'<small>#'+p.i+'</small></div>'; }).join('');
-    var counts={}; r.results.forEach(function(p){ counts[p.tier]=(counts[p.tier]||0)+1; });
-    $('tally').innerHTML='Tally: '+Object.keys(counts).map(function(k){return '<b>'+counts[k]+'</b> '+k;}).join(' · ');
-    $('cSeed').textContent=r.combined; $('cCommit').textContent=rec.commitment.slice(0,24)+'…'; $('cServer').textContent=rec.serverSeed.slice(0,24)+'…';
-    lastRecord=rec; $('jsonPre').textContent=JSON.stringify(rec,null,2);
-    $('result').style.display='block'; $('jsonBox').style.display='block';
-    $('status').innerHTML='<span class="ok">Pulled.</span> '+rec.pullCount+' pulls fixed by serverSeed + clientSeed. Recompute it yourself below.';
+    if(mode==='local'){
+      var rec={ branch:'uvGacha', commitment:'', serverSeed:randHex(32), clientSeed:cs, rateDenominator:D, rules:rules, pullCount:pc, results:[] };
+      rec.commitment=await sha256hex(rec.serverSeed);
+      var r=await resolve(rec); rec.combinedSeed=r.combined; rec.results=r.results; rec.tier='yellow';
+      renderRecord(rec); $('status').innerHTML='<span class="ok">Pulled (in-browser 🟡).</span> Recompute it yourself below.';
+    } else if(mode==='anchored'){
+      $('status').textContent='Committing serverSeed (neutral) + stamping…';
+      var c=await api('/gacha/commit',{ rules:rules, rateDenominator:D, pullCount:pc });
+      var ra=await api('/gacha/reveal',{ sessionId:c.sessionId, clientSeed:cs });
+      renderRecord(ra); $('status').innerHTML='<span class="ok">Pulled (anchored 🟡 notary).</span> serverSeed was committed before your clientSeed.';
+    } else {
+      $('status').textContent='Committing + binding to a future drand round…';
+      var cb=await api('/gacha/commit-batch',{ rules:rules, rateDenominator:D, pullCount:pc, clientSeed:cs, delaySeconds:0 });
+      $('status').innerHTML='Bound to drand round '+cb.round+'. Waiting for it to publish (~3s)…';
+      var rb=null;
+      for(var i=0;i<25;i++){
+        try{ rb=await api('/gacha/reveal',{ sessionId:cb.sessionId }); break; }
+        catch(e){ if((''+e.message).indexOf('not published')<0) throw e; await new Promise(function(res){setTimeout(res,2500);}); }
+      }
+      if(!rb) throw new Error('round did not publish in time — pull again');
+      renderRecord(rb); $('status').innerHTML='<span class="ok">Pulled (batch 🟢).</span> Bound to a future drand round before its randomness existed.';
+    }
   }catch(e){ $('status').innerHTML='<span class="err">'+e.message+'</span>'; }
   $('goPull').disabled=false;
 };
