@@ -71,6 +71,8 @@
     <button class="smallbtn" id="addTier">+ add prize tier</button>
     <div class="mut" id="poolInfo"></div>
     <input id="label" placeholder="Label shown to entrants (e.g. June charity raffle)" style="margin-top:10px">
+    <div class="mut" style="margin-top:10px">Optional — promise a deadline. Stamped into the rules and printed on the ticket; missing it without cancelling is a dated broken promise.</div>
+    <input id="closeBy" type="datetime-local" title="The draw will close by this time." style="margin-top:4px">
     <button class="go open" id="goOpen">① Open — attest the rules (×2 RFC-3161)</button>
     <div class="status" id="openStatus">Add your prize tiers, then open.</div>
     <div id="openResult" style="display:none">
@@ -79,7 +81,8 @@
       <div class="kv"><b>attested at</b><br><span id="rTsas"></span></div>
       <div class="ticket">Print on every ticket:<br>
         <span class="big" id="tTicket"></span><br>
-        <span class="mut" id="tLookup"></span></div>
+        <span class="mut" id="tLookup"></span><span class="mut" id="tDeadline"></span></div>
+      <button class="smallbtn" id="cancelDraw" style="margin-top:10px">Cancel this draw</button> <span class="mut" id="cancelInfo"></span>
     </div>
   </div>
 
@@ -229,24 +232,36 @@ $('genBtn').onclick=function(){ var n=Math.max(1,parseInt($('genN').value)||0), 
   for(var i=1;i<=n;i++) a.push(pfx+String(i).padStart(pad,'0')); $('parts').value=a.join('\n'); refreshParts(); };
 $('delay').onchange=function(){ $('delayMin').style.display=this.value==='custom'?'block':'none'; };
 function delaySeconds(){ var v=$('delay').value; return v==='custom'? Math.max(1,parseInt($('delayMin').value)||0)*60 : parseInt(v)||0; }
+function closeByTs(){ var v=$('closeBy').value; if(!v) return null; var t=Math.floor(new Date(v).getTime()/1000); return isFinite(t)?t:null; }
 
 /* ---- ① open ---- */
 $('goOpen').onclick=async function(){
   var pool=poolRows(); if(!pool.length){ $('openStatus').innerHTML='<span class="err">Add at least one prize tier.</span>'; return; }
   $('goOpen').disabled=true; $('openStatus').innerHTML='Attesting the rules at ×2 RFC-3161 TSAs…';
   var d;
-  try{ var r=await fetch(BACKEND+'/open',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prizePool:pool,label:$('label').value.trim()||null})}); d=await r.json(); if(!r.ok) throw new Error(d.error||'open failed'); }
+  try{ var r=await fetch(BACKEND+'/open',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prizePool:pool,label:$('label').value.trim()||null,closeBy:closeByTs()})}); d=await r.json(); if(!r.ok) throw new Error(d.error||'open failed'); }
   catch(e){ $('openStatus').innerHTML='<span class="err">open failed: '+e.message+'</span>'; $('goOpen').disabled=false; return; }
   var tokens=(d.rulesAnchor&&d.rulesAnchor.tokens)||[];
   $('rDrawId').textContent=d.drawId; $('rRulesHash').textContent=(d.rulesHash||'').slice(0,32)+'…';
   $('rTsas').innerHTML=tokens.map(function(t){return '<span class="ok">'+t.tsa+'</span> '+(t.genTime?iso(t.genTime):'—');}).join('<br>')||'—';
   $('tTicket').textContent='Draw #'+d.drawId;
   $('tLookup').innerHTML='Verify at '+SITE+'/d/'+d.drawId+'  <i>(human proof page — next build)</i> · raw record: registrar.uncloned.work/draws/'+d.drawId;
+  $('tDeadline').innerHTML = d.closeBy? '<br>Closes by '+iso(d.closeBy) : '';
   $('openResult').style.display='block';
   openedPool=pool; openedDrawId=d.drawId; prizeWarnAck=false;
   $('drawId').value=d.drawId; $('closeCard').classList.remove('off'); $('closeStatus').innerHTML='Rules attested. Add entrants and draw — now or after sales.';
   $('openStatus').innerHTML='<span class="ok">Opened.</span> Prizes are frozen and timestamped. Print the drawId on every ticket.';
   $('goOpen').disabled=false;
+};
+
+$('cancelDraw').onclick=async function(){
+  var drawId=($('drawId').value.trim())||(($('rDrawId').textContent)||'').trim(); if(!drawId){ return; }
+  if(!confirm('Cancel draw '+drawId+'? This publicly marks it cancelled so entrants can tell it apart from a draw you simply abandoned.')) return;
+  var reason=prompt('Optional reason shown publicly (e.g. event cancelled):','')||'';
+  $('cancelInfo').textContent='cancelling…';
+  try{ var r=await fetch(BACKEND+'/cancel',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({drawId:drawId,reason:reason})}); var d=await r.json(); if(!r.ok) throw new Error(d.error||'cancel failed');
+    $('cancelInfo').innerHTML='<span class="ok">cancelled</span>'+(d.cancelReason?' — '+d.cancelReason:''); }
+  catch(e){ $('cancelInfo').innerHTML='<span style="color:var(--red)">'+e.message+'</span>'; }
 };
 
 /* ---- ② close & draw ---- */
