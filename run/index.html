@@ -126,7 +126,7 @@
       <div class="kv"><b>future drand round R</b> <span id="cRound"></span></div>
       <div class="kv"><b>RFC-3161 anchors</b><br><span id="cTsas"></span></div>
       <div class="kv"><b>§5.4 — stamped before R?</b> <span id="cOk"></span></div>
-      <div class="kv"><b>give your entrants</b> <a class="lnk" id="cStatus" target="_blank" rel="noopener">live status ↗</a> · <a class="lnk" id="cRecord" target="_blank" rel="noopener">verifiable record ↗</a></div>
+      <div class="kv"><b>give your entrants</b> <a class="lnk" id="cStatus" target="_blank" rel="noopener">live status ↗</a> · <a class="lnk" id="cRecord" target="_blank" rel="noopener">verifiable record ↗</a> · <a class="lnk" id="cDoc" target="_blank" rel="noopener">offer + result doc ↗</a></div>
       <button class="smallbtn" id="refresh" style="margin-top:8px">↻ check status / reveal</button>
     </div>
   </div>
@@ -298,6 +298,7 @@ $('goClose').onclick=async function(){
   var before=tokens.filter(function(t){return t.genTime&&t.genTime<c.roundTime;}).length;
   $('cOk').innerHTML= before>=1? '<span class="ok">YES ✓ '+before+'/'+tokens.length+' stamped before R</span>':'<span class="err">NO</span>';
   $('cStatus').href=BACKEND+'/draw-status/'+sess; $('cRecord').href=BACKEND+'/draws/'+drawId;
+  $('cDoc').href=location.protocol+'//'+SITE+'/doc/?drawId='+drawId+(BACKEND!=='https://registrar.uncloned.work'?'&backend='+encodeURIComponent(BACKEND):'');
   $('closeResult').style.display='block';
   $('jsonPre').textContent=JSON.stringify(c,null,2); $('jsonBox').style.display='block';
   var ds=delaySeconds();
