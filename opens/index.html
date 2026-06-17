@@ -12,7 +12,7 @@ th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--ln);vertica
 th{color:var(--mut);font-weight:600}
 .pill{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;font-weight:600}
 .open{background:rgba(216,166,87,.15);color:var(--gold)}.closed{background:rgba(63,185,80,.15);color:var(--ok)}
-.stale{background:rgba(229,83,75,.15);color:var(--red)}.cancel{background:rgba(139,148,158,.18);color:var(--mut)}
+.stale{background:rgba(229,83,75,.15);color:var(--red)}.cancel{background:rgba(139,148,158,.18);color:var(--mut)}.ended{background:rgba(88,166,255,.15);color:var(--lnk)}
 a{color:var(--lnk);text-decoration:none}a:hover{text-decoration:underline}
 .mono{font-family:ui-monospace,Menlo,Consolas,monospace}
 .mut{color:var(--mut)}.tot{display:flex;gap:18px;margin:0 0 14px;flex-wrap:wrap}
@@ -22,7 +22,7 @@ a{color:var(--lnk);text-decoration:none}a:hover{text-decoration:underline}
 <p class="sub">Every draw is listed here the moment it is <span class="mono">/open</span>ed &mdash; before any tickets are sold. An entry that stays <span class="pill open">open</span> and never becomes <span class="pill closed">closed</span> is a draw that was started and abandoned. This makes <i>selective publication</i> (open many, reveal only the convenient one) a visible anomaly. <span class="mut">uvLottery &sect;5.6</span></p>
 <div class="tot" id="tot"></div>
 <div class="card"><div id="body">Loading&hellip;</div></div>
-<p class="foot">Source: <span class="mono" id="src"></span> &middot; cross-check revealed results at <a id="drawsLink" target="_blank" rel="noopener">/draws</a>. Tags: <span class="pill stale">overdue</span> = past its promised <i>closes by</i> and not closed; <span class="pill stale">abandoned?</span> = no deadline given, opened &gt; 1&nbsp;h ago, still open; <span class="pill cancel">cancelled</span> = the operator publicly called it off.</p>
+<p class="foot">Source: <span class="mono" id="src"></span> &middot; cross-check revealed results at <a id="drawsLink" target="_blank" rel="noopener">/draws</a>. Tags: <span class="pill stale">overdue</span> = past its promised <i>closes by</i> and not closed; <span class="pill ended">open-ended</span> = no fixed date (a stated close condition may be shown); <span class="pill stale">no condition</span> = open-ended with no stated trigger; <span class="pill stale">check?</span> = a closes-by date set absurdly far out (&gt; 1&nbsp;year); <span class="pill cancel">cancelled</span> = the operator publicly called it off.</p>
 </div><script>
 var BACKEND=new URLSearchParams(location.search).get('backend')||'https://registrar.uncloned.work';
 document.getElementById('src').textContent=BACKEND+'/opens';
@@ -41,17 +41,20 @@ function prize(p){ if(!Array.isArray(p)) return '—';
       '<div><b>'+(d.closed||0)+'</b> <span class="mut">closed</span></div>'+
       '<div><b>'+(d.open||0)+'</b> <span class="mut">still open</span></div>';
     if(!items.length){ document.getElementById('body').innerHTML='<span class="mut">No draws opened yet.</span>'; return; }
+    var YEAR=365*86400;
     function fmt(s){ return esc((s||'').replace('T',' ').replace(/\..+/,' UTC')); }
     var rows=items.map(function(i){
-      var pill;
+      var pill, far=i.closeBy && i.closeBy>now+YEAR;
       if(i.status==='cancelled') pill='<span class="pill cancel" title="'+esc(i.cancelReason||'')+'">cancelled</span>';
       else if(i.status==='closed') pill='<span class="pill closed">closed</span>';
-      else { var overdue=i.closeBy && now>i.closeBy, stale=!i.closeBy && i.openedAt && (now-i.openedAt>3600);
-        pill= overdue?'<span class="pill stale">overdue</span>':(stale?'<span class="pill stale">abandoned?</span>':'<span class="pill open">open</span>'); }
+      else if(i.closeBy) pill=(now>i.closeBy)?'<span class="pill stale">overdue</span>':(far?'<span class="pill stale">check?</span>':'<span class="pill open">open</span>');
+      else if(i.openEnded) pill='<span class="pill ended">open-ended</span>'+(i.closeCondition?'':' <span class="pill stale" title="no close condition stated">no condition</span>');
+      else { var stale=i.openedAt && (now-i.openedAt>3600); pill= stale?'<span class="pill stale">abandoned?</span>':'<span class="pill open">open</span>'; }
+      var cbcol = i.closeBy? fmt(i.closeByISO) : (i.openEnded? ('open-ended'+(i.closeCondition?' · <span class="mut">'+esc(i.closeCondition)+'</span>':'')) : '—');
       return '<tr><td class="mono"><a href="'+BACKEND+'/draws/'+esc(i.drawId)+'" target="_blank" rel="noopener">'+esc(i.drawId)+'</a></td>'+
         '<td>'+esc(i.label||'—')+'</td><td>'+prize(i.prizePool)+'</td>'+
         '<td class="mut">'+fmt(i.openedISO)+'</td>'+
-        '<td class="mut">'+(i.closeByISO?fmt(i.closeByISO):'—')+'</td>'+
+        '<td>'+cbcol+'</td>'+
         '<td>'+pill+'</td></tr>';
     }).join('');
     document.getElementById('body').innerHTML='<table><thead><tr><th>drawId</th><th>label</th><th>prizes</th><th>opened</th><th>closes by</th><th>status</th></tr></thead><tbody>'+rows+'</tbody></table>';

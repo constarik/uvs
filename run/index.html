@@ -71,8 +71,13 @@
     <button class="smallbtn" id="addTier">+ add prize tier</button>
     <div class="mut" id="poolInfo"></div>
     <input id="label" placeholder="Label shown to entrants (e.g. June charity raffle)" style="margin-top:10px">
-    <div class="mut" style="margin-top:10px">Optional — promise a deadline. Stamped into the rules and printed on the ticket; missing it without cancelling is a dated broken promise.</div>
-    <input id="closeBy" type="datetime-local" title="The draw will close by this time." style="margin-top:4px">
+    <div class="mut" style="margin-top:10px">Closing terms — required, stamped into the rules and printed on the ticket. No silent draws.</div>
+    <select id="closeMode" style="margin-top:4px">
+      <option value="date">Closes by a date…</option>
+      <option value="open">Open-ended (no fixed date)</option>
+    </select>
+    <input id="closeBy" type="datetime-local" title="The draw will close by this time." style="margin-top:6px">
+    <input id="closeCond" placeholder="Close condition (optional, e.g. when 1000 tickets are sold)" style="margin-top:6px;display:none">
     <button class="go open" id="goOpen">① Open — attest the rules (×2 RFC-3161)</button>
     <div class="status" id="openStatus">Add your prize tiers, then open.</div>
     <div id="openResult" style="display:none">
@@ -233,20 +238,24 @@ $('genBtn').onclick=function(){ var n=Math.max(1,parseInt($('genN').value)||0), 
 $('delay').onchange=function(){ $('delayMin').style.display=this.value==='custom'?'block':'none'; };
 function delaySeconds(){ var v=$('delay').value; return v==='custom'? Math.max(1,parseInt($('delayMin').value)||0)*60 : parseInt(v)||0; }
 function closeByTs(){ var v=$('closeBy').value; if(!v) return null; var t=Math.floor(new Date(v).getTime()/1000); return isFinite(t)?t:null; }
+$('closeMode').onchange=function(){ var d=this.value==='date'; $('closeBy').style.display=d?'block':'none'; $('closeCond').style.display=d?'none':'block'; };
 
 /* ---- ① open ---- */
 $('goOpen').onclick=async function(){
   var pool=poolRows(); if(!pool.length){ $('openStatus').innerHTML='<span class="err">Add at least one prize tier.</span>'; return; }
+  var terms;
+  if($('closeMode').value==='date'){ var cb=closeByTs(); if(!cb){ $('openStatus').innerHTML='<span class="err">Pick a close-by date, or choose Open-ended.</span>'; return; } terms={closeBy:cb}; }
+  else { terms={openEnded:true, closeCondition:$('closeCond').value.trim()||null}; }
   $('goOpen').disabled=true; $('openStatus').innerHTML='Attesting the rules at ×2 RFC-3161 TSAs…';
   var d;
-  try{ var r=await fetch(BACKEND+'/open',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prizePool:pool,label:$('label').value.trim()||null,closeBy:closeByTs()})}); d=await r.json(); if(!r.ok) throw new Error(d.error||'open failed'); }
+  try{ var r=await fetch(BACKEND+'/open',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(Object.assign({prizePool:pool,label:$('label').value.trim()||null},terms))}); d=await r.json(); if(!r.ok) throw new Error(d.error||'open failed'); }
   catch(e){ $('openStatus').innerHTML='<span class="err">open failed: '+e.message+'</span>'; $('goOpen').disabled=false; return; }
   var tokens=(d.rulesAnchor&&d.rulesAnchor.tokens)||[];
   $('rDrawId').textContent=d.drawId; $('rRulesHash').textContent=(d.rulesHash||'').slice(0,32)+'…';
   $('rTsas').innerHTML=tokens.map(function(t){return '<span class="ok">'+t.tsa+'</span> '+(t.genTime?iso(t.genTime):'—');}).join('<br>')||'—';
   $('tTicket').textContent='Draw #'+d.drawId;
   $('tLookup').innerHTML='Verify at '+SITE+'/d/'+d.drawId+'  <i>(human proof page — next build)</i> · raw record: registrar.uncloned.work/draws/'+d.drawId;
-  $('tDeadline').innerHTML = d.closeBy? '<br>Closes by '+iso(d.closeBy) : '';
+  $('tDeadline').innerHTML = d.closeBy? '<br>Closes by '+iso(d.closeBy) : (d.openEnded? '<br>Open-ended'+(d.closeCondition? ' — closes when: '+String(d.closeCondition).replace(/[<>]/g,'') : '') : '');
   $('openResult').style.display='block';
   openedPool=pool; openedDrawId=d.drawId; prizeWarnAck=false;
   $('drawId').value=d.drawId; $('closeCard').classList.remove('off'); $('closeStatus').innerHTML='Rules attested. Add entrants and draw — now or after sales.';
