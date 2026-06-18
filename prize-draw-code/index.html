@@ -1,0 +1,91 @@
+<!doctype html><html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Clause 2.2 of the Prize Draw Code: verifiably random and auditable draws</title>
+<meta name="description" content="The DCMS Voluntary Code of Good Practice for Prize Draw Operators lets you evidence draw fairness with a computer process that produces verifiably random and auditable results. Here is what 'auditable' actually requires — and how to meet clause 2.2 without an independent person at every draw.">
+<link rel="canonical" href="https://uvs.uncloned.work/prize-draw-code/">
+<meta property="og:title" content="Meeting clause 2.2 of the Prize Draw Code: verifiably random and auditable draws">
+<meta property="og:description" content="What 'verifiably random and auditable' actually requires under the DCMS Prize Draw Code — and how a recomputable draw meets it.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://uvs.uncloned.work/prize-draw-code/">
+<style>
+ :root{ --ink:#16191d; --mut:#5b6470; --ln:#dfe3e9; --accent:#1f6feb; --ok:#1a7f37; --bg:#f7f8fa; --card:#fff; --code:#eef1f5; }
+ *{box-sizing:border-box}
+ body{margin:0;background:var(--bg);color:var(--ink);font:17px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Georgia,sans-serif}
+ .wrap{max-width:760px;margin:0 auto;padding:40px 22px 64px}
+ .kicker{font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--accent);font-weight:700;margin:0 0 8px}
+ h1{font-size:30px;line-height:1.25;margin:0 0 14px;letter-spacing:-.01em}
+ .lede{font-size:19px;color:#333;margin:0 0 8px}
+ .meta{color:var(--mut);font-size:14px;margin:6px 0 26px;border-bottom:1px solid var(--ln);padding-bottom:18px}
+ h2{font-size:21px;margin:34px 0 10px;letter-spacing:-.01em}
+ h3{font-size:17px;margin:22px 0 6px}
+ p{margin:12px 0}
+ blockquote{margin:16px 0;padding:12px 18px;border-left:3px solid var(--accent);background:var(--card);color:#2a2f36;border-radius:0 8px 8px 0;font-size:16px}
+ blockquote cite{display:block;margin-top:6px;color:var(--mut);font-size:13px;font-style:normal}
+ ul,ol{margin:12px 0;padding-left:22px}
+ li{margin:7px 0}
+ code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;background:var(--code);border:1px solid var(--ln);border-radius:5px;padding:1px 5px;font-size:14px}
+ .card{background:var(--card);border:1px solid var(--ln);border-radius:12px;padding:18px 20px;margin:18px 0}
+ .check li{list-style:none;position:relative;padding-left:26px}
+ .check li:before{content:"✓";position:absolute;left:0;color:var(--ok);font-weight:800}
+ a{color:var(--accent);text-decoration:none}
+ a:hover{text-decoration:underline}
+ .cta{display:flex;flex-wrap:wrap;gap:10px;margin:18px 0}
+ .cta a{display:inline-block;border:1px solid var(--accent);color:var(--accent);border-radius:10px;padding:10px 16px;font-weight:600;font-size:15px}
+ .cta a.solid{background:var(--accent);color:#fff}
+ .note{color:var(--mut);font-size:14px}
+ footer{margin-top:40px;border-top:1px solid var(--ln);padding-top:16px;color:var(--mut);font-size:14px}
+</style></head>
+<body><div class="wrap">
+
+<p class="kicker">DCMS Prize Draw Code · Clause 2.2</p>
+<h1>How to run a “verifiably random and auditable” prize draw</h1>
+<p class="lede">The Voluntary Code of Good Practice for Prize Draw Operators gives you three ways to evidence that a draw is fair. One of them needs no independent person at every draw — if you can show the result is <em>auditable</em>. Here’s what that word actually requires, and how to meet it.</p>
+<p class="meta">A plain-English guide for prize-draw and competition operators. Not legal advice.</p>
+
+<h2>What clause 2.2 actually says</h2>
+<p>The Code asks that prizes are awarded fairly, by an independent person <em>or</em> — and this is the part most operators miss —</p>
+<blockquote>“…unless winners are selected by a computer process that produces verifiably random and auditable results…”
+<cite>Voluntary Code of Good Practice for Prize Draw Operators, clause 2.2 (DCMS, Open Government Licence v3.0)</cite></blockquote>
+<p>The same clause adds: <em>“Operators should provide details of the mechanism used for draws on their website.”</em> So clause 2.2 is really two obligations: pick winners by a process that is <strong>verifiably random and auditable</strong>, and <strong>publish how it works</strong>.</p>
+
+<h2>The three routes — and why one is cheaper</h2>
+<ol>
+<li><strong>An independent person</strong> (or one supervising the draw) — recurring cost and scheduling at every single draw.</li>
+<li><strong>A computer process that produces verifiably random and auditable results</strong> — set up once, no per-draw human.</li>
+<li><strong>A certified physical drawing machine</strong> — capital cost; certification.</li>
+</ol>
+<p>For a platform running weekly or instant-win draws at volume, route 2 is the only one that scales without adding cost to every draw. But it only counts if you can stand behind both words: <em>random</em> and <em>auditable</em>.</p>
+
+<h2>“Random” is easy to claim. “Auditable” is the bar.</h2>
+<p>Almost any operator can write “winners are selected by a random computer process” on their site. That sentence satisfies <em>random</em> on paper. It does nothing for <em>auditable</em> — because auditable means something specific: <strong>someone other than you can check the result and confirm it for themselves.</strong> A claim you can’t reproduce isn’t auditable; it’s just a claim.</p>
+<p>The practical test: <em>could a journalist, a disgruntled entrant, or a regulator take your published draw and independently arrive at the same winner — without trusting you, and without asking your permission?</em> If yes, it’s auditable. If the only proof is “our system did it,” it isn’t.</p>
+
+<h2>A checklist for a verifiably random and auditable draw</h2>
+<div class="card"><ul class="check">
+<li><strong>Commit the secret before the draw.</strong> Publish a hash of the draw’s seed <em>before</em> selection, so it can’t be swapped afterwards.</li>
+<li><strong>Use randomness that didn’t exist at commit time.</strong> Draw the entropy from a public source (e.g. a public randomness beacon) whose value is unknown when you commit — so no one, including you, could have pre-picked a favourable result.</li>
+<li><strong>Fix the inputs up front.</strong> Publish and timestamp the prize list and the closing terms <em>before tickets sell</em>. This also covers clause 2.5 (no changing the end date, no cancelling for low sales, no down-valuing the prize) — because any later change is publicly visible.</li>
+<li><strong>Make the selection reproducible.</strong> Anyone with the published inputs can re-run the selection and get the same winner. Independent reference code in more than one language is the gold standard.</li>
+<li><strong>Publish the mechanism.</strong> A page describing exactly how the draw is computed satisfies the “details of the mechanism” requirement in 2.2 and your transparency obligation in 3.4.</li>
+</ul></div>
+<p>Meet all five and “auditable” stops being a word on a terms page and becomes a fact anyone can check.</p>
+
+<h2>You can build this yourself</h2>
+<p>None of the above is proprietary. <strong>UVS (the Uncloned Verification Standard)</strong> is an open specification for exactly this kind of draw — a seed committed and timestamped before sales, the winner fixed by the public <strong>drand</strong> randomness beacon, and the whole result recomputable by anyone. The spec and four independent reference verifiers (JavaScript, Python, Java, C++) are open source under the MIT licence, so the verification doesn’t depend on trusting any one vendor — including us.</p>
+<p>If you’d rather not run the cryptography and timestamping yourself, there’s a hosted layer that does the commit, the ×2 independent RFC-3161 timestamps, and the public draw record — and gives your entrants a one-click “recompute it yourself” page. Either way, the result is the same: a draw your entrants can check, not one they have to trust.</p>
+
+<div class="cta">
+<a class="solid" href="https://uvs.uncloned.work/lottery">Try a live draw</a>
+<a href="https://uvs.uncloned.work/d/?drawId=fb32b3235f32b6c2">See a finished, recomputable draw</a>
+<a href="https://github.com/constarik/uvs">Read the open spec (MIT)</a>
+</div>
+
+<h2>What this proves — and what it doesn’t</h2>
+<p>An auditable draw proves the published winner follows from the published entries and the public randomness. It is honest about its limit: it does <strong>not</strong> vouch for the entry list itself — whether every entry is a real, paid participant is still on the operator (your billing and records). Clause 2.2 is about the integrity of the <em>selection</em>; that’s exactly what a recomputable draw secures.</p>
+
+<footer>
+UVS is an independent verification layer (<a href="https://uncloned.work">uncloned.work</a>) — not a prize-draw operator. It takes no entries, holds no prize pool, runs no sale, and holds no licence; it only produces the timestamped, independently-recomputable draw facts described here. This page is general information about the DCMS Voluntary Code of Good Practice for Prize Draw Operators, not legal advice; operators remain responsible for their own compliance. Code text © Crown copyright, Open Government Licence v3.0.
+</footer>
+
+</div></body></html>
