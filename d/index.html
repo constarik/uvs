@@ -1,0 +1,190 @@
+<!doctype html><html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Draw result — verify it yourself · UVS</title>
+<style>
+ :root{ --bg:#0e1116; --panel:#171b22; --line:#262c36; --ink:#e8edf4; --dim:#8b95a5;
+   --gold:#f2c14e; --blue:#6ea8fe; --green:#34d17e; --red:#ff5d6c; }
+ *{box-sizing:border-box}
+ body{margin:0;background:radial-gradient(1200px 600px at 50% -10%,#1a2230,#0e1116);color:var(--ink);
+   font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;min-height:100vh;
+   display:flex;flex-direction:column;align-items:center;padding:22px}
+ .wrap{width:100%;max-width:660px}
+ #errbar{display:none;background:#3a1014;border:1px solid #ff5d6c;color:#ffd7db;padding:10px 12px;border-radius:10px;margin-bottom:12px;font:12px ui-monospace,monospace;word-break:break-all}
+ .topbar{display:flex;gap:8px;align-items:center;margin-bottom:14px;flex-wrap:wrap}
+ .topbar input{flex:1;min-width:170px;font:13px ui-monospace,monospace;color:var(--ink);background:#11151b;border:1px solid var(--line);border-radius:9px;padding:8px 10px}
+ .topbar button{border:1px solid var(--line);background:#11151b;color:var(--dim);border-radius:9px;padding:8px 13px;cursor:pointer;font:inherit;font-size:13px}
+ .muted{color:var(--dim)}
+ .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px 18px;margin-bottom:14px}
+ .badge{display:inline-block;font-size:13px;padding:5px 13px;border-radius:999px;font-weight:700}
+ .badge.g{color:#bfe3c9;background:rgba(52,209,126,.12);border:1px solid rgba(52,209,126,.45)}
+ .badge.a{color:#f3d79a;background:rgba(242,193,78,.12);border:1px solid rgba(242,193,78,.45)}
+ .badge.r{color:#ffc2c8;background:rgba(255,93,108,.12);border:1px solid rgba(255,93,108,.45)}
+ h1{font-size:20px;margin:12px 0 2px;letter-spacing:.2px}
+ .sub{color:var(--dim);font-size:13px;margin:0 0 4px}
+ .win{display:flex;gap:10px;align-items:baseline;padding:9px 11px;border:1px solid var(--line);border-radius:10px;margin:7px 0;background:#11151b}
+ .win .rk{color:var(--dim);width:34px;font-variant-numeric:tabular-nums;font-size:13px}
+ .win .id{font-family:ui-monospace,monospace;flex:1;word-break:break-all}
+ .win .pz{font-weight:700;color:var(--green)}
+ h2{font-size:12px;letter-spacing:.3px;text-transform:uppercase;color:var(--dim);margin:18px 0 8px}
+ p.exp{font-size:13.5px;color:#c4cdda;margin:8px 0}
+ .kv{font-family:ui-monospace,monospace;font-size:11.5px;color:var(--dim);word-break:break-all;margin:5px 0}
+ .kv b{color:var(--ink);font-family:-apple-system,system-ui,sans-serif;font-weight:600}
+ .go{width:100%;padding:13px;border:0;border-radius:12px;font-size:15px;font-weight:800;letter-spacing:.3px;cursor:pointer;margin:6px 0;color:#06140c;background:linear-gradient(180deg,#34d17e,#22a261)}
+ .go:disabled{opacity:.6;cursor:wait}
+ .step{display:flex;gap:9px;align-items:flex-start;padding:7px 0;border-bottom:1px solid #181d26;font-size:13px}
+ .step .mk{width:18px;flex:none;text-align:center}
+ .ok{color:var(--green)} .err{color:var(--red)} .run{color:var(--gold)}
+ .step .tx b{color:var(--ink)} .step small{display:block;color:var(--dim);font-family:ui-monospace,monospace;font-size:11px;word-break:break-all}
+ .verdict{margin-top:10px;font-weight:700;font-size:14px}
+ a{color:var(--blue);text-decoration:none}
+ details{margin-top:10px}summary{cursor:pointer;color:var(--blue);font-size:13px}
+ pre{white-space:pre-wrap;word-break:break-all;font-size:11px;color:var(--dim);background:#11151b;border:1px solid var(--line);border-radius:10px;padding:10px;margin-top:8px}
+ .links{font-size:12.5px;line-height:1.9;margin-top:6px}
+ .foot{color:#6b7686;font-size:11.5px;margin-top:18px;line-height:1.5}
+</style></head><body>
+<div class="wrap">
+  <div id="errbar"></div>
+  <div class="topbar">
+    <input id="idIn" placeholder="paste a drawId">
+    <button onclick="load()">Verify</button>
+  </div>
+  <div id="view"><p class="muted">Enter a drawId above, or open <span style="font-family:ui-monospace,monospace">/d/?drawId=…</span></p></div>
+  <div class="foot">UVS is an independent verification layer (uncloned.work) — not the organiser. It holds no funds, takes no entries, and runs no sale; it only produces the timestamped, recomputable draw facts shown here.</div>
+</div>
+<script>
+window.onerror=function(m,s,l,c,e){var b=document.getElementById('errbar');if(b){b.style.display='block';b.textContent='⚠ '+((e&&e.message)||m)+' @'+l+':'+c;}return false;};
+var $=function(id){return document.getElementById(id);};
+var P=new URLSearchParams(location.search);
+var BACKEND=P.get('backend')||'https://registrar.uncloned.work';
+var SITE='https://uvs.uncloned.work';
+var RECORD=null;
+function esc(s){return String(s==null?'':s).replace(/[&<>]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;'}[c];});}
+function iso(t){ return t? new Date(t*1000).toISOString().replace('T',' ').replace('.000Z',' UTC') : '—'; }
+function isoMs(s){ return s? esc(String(s).replace('T',' ').replace(/\..+/,' UTC')) : '—'; }
+
+function getId(){
+  var q=P.get('drawId')||P.get('id'); if(q) return q.trim();
+  if(location.search.length>1 && location.search.indexOf('=')<0) return decodeURIComponent(location.search.slice(1)).trim();
+  var seg=location.pathname.replace(/\/+$/,'').split('/'); var last=seg[seg.length-1];
+  if(last && last!=='d') return decodeURIComponent(last).trim();
+  return '';
+}
+async function sha256hex(str){
+  var buf=await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+  return Array.prototype.map.call(new Uint8Array(buf),function(b){return ('0'+b.toString(16)).slice(-2);}).join('');
+}
+function prizeText(p){ if(!Array.isArray(p)) return '—';
+  return p.map(function(t){ if(t.count!=null) return esc(t.tier)+' × '+t.count;
+    if(t.rule&&t.rule.num===1) return esc(t.tier)+' — 1 in '+t.rule.den;
+    if(t.rule) return esc(t.tier)+' — '+t.rule.num+'%'; return esc(t.tier); }).join(' · '); }
+function tsaList(a){ if(!a) return [];
+  if(Array.isArray(a.tokens)) return a.tokens.map(function(t){return {tsa:t.tsa,genTime:t.genTime};});
+  if(a.tsa) return [{tsa:a.tsa,genTime:a.genTime}]; return []; }
+function tierInfo(t){ t=String(t||'').toLowerCase();
+  if(t==='green') return {cls:'g',txt:'🟢 Verified — outcome-bound'};
+  if(t==='amber'||t==='yellow') return {cls:'a',txt:'🟡 Anchored (notary)'};
+  return {cls:'r',txt:'🔴 Unanchored'}; }
+async function j(u){ var r=await fetch(u); var t=await r.text(); var d; try{d=JSON.parse(t)}catch(e){d=null} return {s:r.status,d:d}; }
+
+async function load(id){
+  id=(typeof id==='string'?id:'')||($('idIn').value||'').trim(); if(!id) return;
+  $('idIn').value=id;
+  history.replaceState(null,'',location.pathname+'?drawId='+encodeURIComponent(id));
+  $('view').innerHTML='<p class="muted">Loading '+esc(id)+'…</p>';
+  var rec=await j(BACKEND+'/draws/'+encodeURIComponent(id));
+  var opensR=await j(BACKEND+'/opens?limit=200');
+  var terms=(opensR.d&&opensR.d.items||[]).filter(function(x){return x.drawId===id;})[0]||{};
+  if(rec.s!==200||!rec.d||!rec.d.result){
+    if(terms.drawId){ renderOffer(id,terms); return; }
+    $('view').innerHTML='<div class="card"><p class="muted">No record found for drawId <b style="color:var(--ink)">'+esc(id)+'</b> on '+esc(BACKEND)+'.</p></div>'; return;
+  }
+  RECORD=rec.d; renderResult(rec.d, terms);
+}
+
+function linksBlock(d){
+  var ru=BACKEND+'/draws/'+encodeURIComponent(d.drawId);
+  var doc=SITE+'/doc/?drawId='+encodeURIComponent(d.drawId);
+  var dr=(d.drand&&d.drand.verifyUrl)||'';
+  return '<div class="links">'+
+   '• Published record (JSON): <a href="'+ru+'" target="_blank" rel="noopener">registrar.uncloned.work/draws/'+esc(d.drawId)+'</a><br>'+
+   '• Formal offer + result document: <a href="'+doc+'" target="_blank" rel="noopener">printable / PDF</a><br>'+
+   (dr?'• Re-fetch the randomness from the public beacon: <a href="'+esc(dr)+'" target="_blank" rel="noopener">api.drand.sh round '+esc(d.drand.round)+'</a><br>':'')+
+   '• Reference verifiers (JS / Python / Java / C++): <a href="https://github.com/constarik/uvs/tree/master/verifiers" target="_blank" rel="noopener">github.com/constarik/uvs</a>'+
+   '</div>';
+}
+
+function renderOffer(id, terms){
+  $('view').innerHTML='<div class="card"><span class="badge a">🟡 Not drawn yet — terms published</span>'+
+   '<h1>'+esc(terms.label||'Prize draw')+'</h1>'+
+   '<p class="sub">drawId '+esc(id)+'</p>'+
+   '<p class="exp">The prizes below were fixed and timestamped <b>before any ticket was sold</b>. The winner has not been drawn yet — come back after the draw closes to recompute the result yourself.</p>'+
+   '<div class="kv"><b>Prizes</b> '+prizeText(terms.prizePool)+'</div>'+
+   '<div class="kv"><b>Rules hash</b> '+esc(terms.rulesHash||'—')+'</div>'+
+   '<div class="kv"><b>Terms timestamped</b> opened '+isoMs(terms.openedISO)+' (RFC-3161, ×2 TSA)</div>'+
+   '<h2>For developers</h2>'+linksBlock({drawId:id,drand:{}})+
+   '</div>';
+}
+
+function renderResult(d, terms){
+  var ti=tierInfo(d.tier);
+  var winners=(d.result||[]).filter(function(r){return r.prize;});
+  var winHtml=winners.length? winners.map(function(r){
+    return '<div class="win"><span class="rk">#'+r.rank+'</span><span class="id">'+esc(r.id)+'</span><span class="pz">'+esc(r.prize)+'</span></div>';
+  }).join('') : '<p class="muted">No prize tier resolved for this draw.</p>';
+  var dr=d.drand||{};
+  var tsas=tsaList(d.commitmentAnchor);
+  var tsaWords=tsas.length? tsas.map(function(t){return esc(t.tsa);}).join(' and ')+' at '+iso(tsas[0].genTime) : 'an independent timestamping authority';
+  var nEnt=Array.isArray(d.participants)?d.participants.length:'—';
+  var h='<div class="card"><span class="badge '+ti.cls+'">'+ti.txt+'</span>'+
+   '<h1>'+esc(d.label||'Prize draw')+'</h1>'+
+   '<p class="sub">drawId '+esc(d.drawId)+' · '+nEnt+' entrants'+(d.declaredCount!=null?' (organiser-declared '+d.declaredCount+', matched)':'')+'</p>'+
+   '<h2>Winner'+(winners.length>1?'s':'')+'</h2>'+winHtml+
+   '<h2>Why you don’t have to trust anyone</h2>'+
+   '<p class="exp">The winner was fixed by the public <b>drand</b> randomness beacon — round '+esc(dr.round)+', published '+iso(dr.roundTime)+'. The prizes and the secret seed were timestamped by '+tsaWords+', <b>before</b> that randomness existed, so no one could steer the outcome. You don’t have to take this on faith — recompute it yourself, right here in your browser:</p>'+
+   '<button class="go" id="reBtn">Recompute it yourself</button>'+
+   '<div id="steps"></div>'+
+   '<h2>The numbers</h2>'+
+   '<div class="kv"><b>drand randomness</b> '+esc(dr.randomness||'')+'</div>'+
+   '<div class="kv"><b>combined seed</b> '+esc(d.combinedSeed||'')+'</div>'+
+   '<div class="kv"><b>server seed</b> '+esc(d.serverSeed||'')+'</div>'+
+   '<div class="kv"><b>commitment</b> '+esc(d.commitment||'')+'</div>'+
+   '<details><summary>Raw record (for developers)</summary><pre>'+esc(JSON.stringify(d,null,2))+'</pre></details>'+
+   '<h2>For developers</h2>'+linksBlock(d)+
+   '</div>';
+  $('view').innerHTML=h;
+  $('reBtn').onclick=function(){ verify(d); };
+}
+
+function mk(s){ return s==='ok'?'<span class="ok">✓</span>':s==='err'?'<span class="err">✗</span>':'<span class="run">…</span>'; }
+function setStep(i,s,html){ var el=$('st'+i); if(el) el.innerHTML='<span class="mk">'+mk(s)+'</span><span class="tx">'+html+'</span>'; }
+async function verify(d){
+  $('reBtn').disabled=true;
+  var labels=['Commitment','Public randomness','Combined seed','Ranking'];
+  $('steps').innerHTML=labels.map(function(l,i){return '<div class="step" id="st'+i+'"><span class="mk">'+mk('run')+'</span><span class="tx"><b>'+l+'</b> — checking…</span></div>';}).join('')+'<div class="verdict" id="vd"></div>';
+  var allok=true, rnd=(d.drand&&d.drand.randomness||'').toLowerCase();
+  try{
+    var ch=await sha256hex(d.serverSeed||'');
+    var c1=ch===(d.commitment||'').toLowerCase();
+    setStep(0,c1?'ok':'err','<b>Commitment</b> — SHA-256(serverSeed) '+(c1?'matches':'does NOT match')+' the value committed before the draw.<small>'+ch+'</small>'); allok=allok&&c1;
+    var c2=false;
+    try{ var beacon=await (await fetch(d.drand.verifyUrl)).json(); c2=(beacon.randomness||'').toLowerCase()===rnd;
+      setStep(1,c2?'ok':'err','<b>Public randomness</b> — re-fetched drand round '+esc(d.drand.round)+' from the public beacon; its randomness '+(c2?'matches':'does NOT match')+' this record.<small>'+esc(beacon.randomness||'')+'</small>');
+    }catch(e){ setStep(1,'err','<b>Public randomness</b> — could not re-fetch the beacon ('+esc(e.message)+'); it stays checkable at the drand link below.'); }
+    allok=allok&&c2;
+    var cs=await sha256hex((d.serverSeed||'')+':'+rnd);
+    var c3=cs===(d.combinedSeed||'').toLowerCase();
+    setStep(2,c3?'ok':'err','<b>Combined seed</b> — SHA-256(serverSeed : randomness) '+(c3?'reproduces':'does NOT reproduce')+' the published combined seed.<small>'+cs+'</small>'); allok=allok&&c3;
+    var ids=Array.isArray(d.participants)?d.participants.slice():[], scored=[];
+    for(var i=0;i<ids.length;i++){ scored.push({id:ids[i], score:await sha256hex(cs+':'+ids[i])}); }
+    scored.sort(function(a,b){ if(a.score<b.score)return 1; if(a.score>b.score)return -1; return a.id<b.id?-1:(a.id>b.id?1:0); });
+    var pub=(d.result||[]).slice().sort(function(a,b){return a.rank-b.rank;});
+    var c4=scored.length===pub.length;
+    for(var k=0;k<pub.length&&c4;k++){ if(scored[k].id!==pub[k].id || scored[k].score!==String(pub[k].score||'').toLowerCase()) c4=false; }
+    setStep(3,c4?'ok':'err','<b>Ranking</b> — recomputed every entrant’s score and put them in order; the ranking '+(c4?'matches':'does NOT match')+' the published winners exactly ('+scored.length+' entrants).'); allok=allok&&c4;
+  }catch(e){ $('vd').innerHTML='<span class="err">Recompute error: '+esc(e.message)+'</span>'; $('reBtn').disabled=false; return; }
+  $('vd').innerHTML= allok? '<span class="ok">✓ All checks passed — this result is exactly what the public inputs produce. You just verified it without trusting the operator or this site.</span>' : '<span class="err">✗ A check failed — this draw does not reconcile. Treat it as broken.</span>';
+  $('reBtn').disabled=false;
+}
+(function(){ var id=getId(); if(id){ $('idIn').value=id; load(id); } })();
+</script>
+</body></html>

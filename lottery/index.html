@@ -254,7 +254,7 @@ $('goOpen').onclick=async function(){
   $('rDrawId').textContent=d.drawId; $('rRulesHash').textContent=(d.rulesHash||'').slice(0,32)+'…';
   $('rTsas').innerHTML=tokens.map(function(t){return '<span class="ok">'+t.tsa+'</span> '+(t.genTime?iso(t.genTime):'—');}).join('<br>')||'—';
   $('tTicket').textContent='Draw #'+d.drawId;
-  $('tLookup').innerHTML='Verify at '+SITE+'/d/'+d.drawId+'  <i>(human proof page — next build)</i> · raw record: registrar.uncloned.work/draws/'+d.drawId;
+  $('tLookup').innerHTML='Verify at <a class="lnk" href="https://'+SITE+'/d/?drawId='+d.drawId+'" target="_blank" rel="noopener">'+SITE+'/d/?drawId='+d.drawId+'</a> · raw record: registrar.uncloned.work/draws/'+d.drawId;
   $('tDeadline').innerHTML = d.closeBy? '<br>Closes by '+iso(d.closeBy) : (d.openEnded? '<br>Open-ended'+(d.closeCondition? ' — closes when: '+String(d.closeCondition).replace(/[<>]/g,'') : '') : '');
   $('openResult').style.display='block';
   openedPool=pool; openedDrawId=d.drawId; prizeWarnAck=false;
