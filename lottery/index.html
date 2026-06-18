@@ -191,7 +191,7 @@ function parseEntries(raw){
   for(var k=0;k<tokens.length;k++){
     var v=tokens[k].trim().replace(/^["']+|["']+$/g,'').trim();   // strip stray CSV quotes
     if(!v){ res.blanks++; continue; }
-    if(/[ -]/.test(v)){ res.invalid++; if(res.invalidList.length<6) res.invalidList.push(v); continue; }
+    if(v.split('').some(function(c){return c.charCodeAt(0)<32;})){ res.invalid++; if(res.invalidList.length<6) res.invalidList.push(v); continue; }
     if(seen[v]){ res.dups++; if(res.dupList.length<8) res.dupList.push(v); continue; }
     seen[v]=1; res.ids.push(v);
   }
