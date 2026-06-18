@@ -1,0 +1,188 @@
+<!doctype html><html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Gacha pulls — verify them yourself · UVS</title>
+<style>
+ :root{ --bg:#0e1116; --panel:#171b22; --line:#262c36; --ink:#e8edf4; --dim:#8b95a5;
+   --gold:#f2c14e; --blue:#6ea8fe; --green:#34d17e; --red:#ff5d6c; --purple:#b58cff; }
+ *{box-sizing:border-box}
+ body{margin:0;background:radial-gradient(1200px 600px at 50% -10%,#1a2230,#0e1116);color:var(--ink);
+   font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;min-height:100vh;
+   display:flex;flex-direction:column;align-items:center;padding:22px}
+ .wrap{width:100%;max-width:660px}
+ #errbar{display:none;background:#3a1014;border:1px solid #ff5d6c;color:#ffd7db;padding:10px 12px;border-radius:10px;margin-bottom:12px;font:12px ui-monospace,monospace;word-break:break-all}
+ .topbar{display:flex;gap:8px;align-items:center;margin-bottom:14px;flex-wrap:wrap}
+ .topbar input{flex:1;min-width:170px;font:13px ui-monospace,monospace;color:var(--ink);background:#11151b;border:1px solid var(--line);border-radius:9px;padding:8px 10px}
+ .topbar button{border:1px solid var(--line);background:#11151b;color:var(--dim);border-radius:9px;padding:8px 13px;cursor:pointer;font:inherit;font-size:13px}
+ .muted{color:var(--dim)}
+ .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px 18px;margin-bottom:14px}
+ .badge{display:inline-block;font-size:13px;padding:5px 13px;border-radius:999px;font-weight:700}
+ .badge.g{color:#bfe3c9;background:rgba(52,209,126,.12);border:1px solid rgba(52,209,126,.45)}
+ .badge.a{color:#f3d79a;background:rgba(242,193,78,.12);border:1px solid rgba(242,193,78,.45)}
+ .badge.r{color:#ffc2c8;background:rgba(255,93,108,.12);border:1px solid rgba(255,93,108,.45)}
+ h1{font-size:20px;margin:12px 0 2px;letter-spacing:.2px}
+ .sub{color:var(--dim);font-size:13px;margin:0 0 4px}
+ .pulls{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}
+ .chip{padding:8px 10px;border-radius:10px;font-size:13px;font-weight:700;border:1px solid var(--line);background:#0f141b;min-width:54px;text-align:center}
+ .chip small{display:block;font-weight:400;color:var(--dim);font-size:10px}
+ .chip.r0{color:var(--gold);border-color:rgba(242,193,78,.5)}
+ .chip.r1{color:var(--purple);border-color:rgba(181,140,255,.5)}
+ .chip.r2{color:var(--blue);border-color:rgba(110,168,254,.4)}
+ .chip.r3{color:var(--dim)}
+ .chip .pity{color:var(--green);font-size:10px;display:block}
+ .tally{font-size:12.5px;color:var(--dim);margin:6px 0}
+ h2{font-size:12px;letter-spacing:.3px;text-transform:uppercase;color:var(--dim);margin:18px 0 8px}
+ p.exp{font-size:13.5px;color:#c4cdda;margin:8px 0}
+ .kv{font-family:ui-monospace,monospace;font-size:11.5px;color:var(--dim);word-break:break-all;margin:5px 0}
+ .kv b{color:var(--ink);font-family:-apple-system,system-ui,sans-serif;font-weight:600}
+ .go{width:100%;padding:13px;border:0;border-radius:12px;font-size:15px;font-weight:800;letter-spacing:.3px;cursor:pointer;margin:6px 0;color:#1a1206;background:linear-gradient(180deg,#f2c14e,#d9a02e)}
+ .go:disabled{opacity:.6;cursor:wait}
+ .step{display:flex;gap:9px;align-items:flex-start;padding:7px 0;border-bottom:1px solid #181d26;font-size:13px}
+ .step .mk{width:18px;flex:none;text-align:center}
+ .ok{color:var(--green)} .err{color:var(--red)} .run{color:var(--gold)}
+ .step .tx b{color:var(--ink)} .step small{display:block;color:var(--dim);font-family:ui-monospace,monospace;font-size:11px;word-break:break-all}
+ .verdict{margin-top:10px;font-weight:700;font-size:14px}
+ a{color:var(--blue);text-decoration:none}
+ details{margin-top:10px}summary{cursor:pointer;color:var(--blue);font-size:13px}
+ pre{white-space:pre-wrap;word-break:break-all;font-size:11px;color:var(--dim);background:#11151b;border:1px solid var(--line);border-radius:10px;padding:10px;margin-top:8px}
+ .links{font-size:12.5px;line-height:1.9;margin-top:6px}
+ .foot{color:#6b7686;font-size:11.5px;margin-top:18px;line-height:1.5}
+</style></head><body>
+<div class="wrap">
+  <div id="errbar"></div>
+  <div class="topbar">
+    <input id="idIn" placeholder="paste a gacha sessionId">
+    <button onclick="load()">Verify</button>
+  </div>
+  <div id="view"><p class="muted">Enter a sessionId above, or open <span style="font-family:ui-monospace,monospace">/g/?id=…</span></p></div>
+  <div class="foot">UVS is an independent verification layer (uncloned.work). The pulls below are a recomputable fact, not a drop you trust — recompute them yourself in your browser.</div>
+</div>
+<script>
+window.onerror=function(m,s,l,c,e){var b=document.getElementById('errbar');if(b){b.style.display='block';b.textContent='⚠ '+((e&&e.message)||m)+' @'+l+':'+c;}return false;};
+var $=function(id){return document.getElementById(id);};
+var P=new URLSearchParams(location.search);
+var BACKEND=P.get('backend')||'https://registrar.uncloned.work';
+function esc(s){return String(s==null?'':s).replace(/[&<>]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;'}[c];});}
+function iso(t){ return t? new Date(t*1000).toISOString().replace('T',' ').replace('.000Z',' UTC') : '—'; }
+function getId(){
+  var q=P.get('id')||P.get('sid')||P.get('sessionId'); if(q) return q.trim();
+  if(location.search.length>1 && location.search.indexOf('=')<0) return decodeURIComponent(location.search.slice(1)).trim();
+  var seg=location.pathname.replace(/\/+$/,'').split('/'); var last=seg[seg.length-1];
+  if(last && last!=='g') return decodeURIComponent(last).trim();
+  return '';
+}
+async function sha256hex(str){
+  var buf=await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+  return Array.prototype.map.call(new Uint8Array(buf),function(b){return ('0'+b.toString(16)).slice(-2);}).join('');
+}
+function tierInfo(t){ t=String(t||'').toLowerCase();
+  if(t==='green') return {cls:'g',txt:'🟢 Verified — outcome-bound (drand)'};
+  if(t==='amber'||t==='yellow') return {cls:'a',txt:'🟡 Anchored — commit-reveal'};
+  return {cls:'r',txt:'🔴 Unanchored'}; }
+function tsaList(a){ if(!a) return [];
+  if(Array.isArray(a.tokens)) return a.tokens.map(function(t){return {tsa:t.tsa,genTime:t.genTime};});
+  if(a.tsa) return [{tsa:a.tsa,genTime:a.genTime}]; return []; }
+var TIDX={};
+function chipClass(t){ if(!(t in TIDX)) return 'r3'; return 'r'+Math.min(TIDX[t],3); }
+async function j(u){ var r=await fetch(u); var t=await r.text(); var d; try{d=JSON.parse(t)}catch(e){d=null} return {s:r.status,d:d}; }
+
+async function load(id){
+  id=(typeof id==='string'?id:'')||($('idIn').value||'').trim(); if(!id) return;
+  $('idIn').value=id;
+  history.replaceState(null,'',location.pathname+'?id='+encodeURIComponent(id));
+  $('view').innerHTML='<p class="muted">Loading '+esc(id)+'…</p>';
+  var rec=await j(BACKEND+'/gacha/'+encodeURIComponent(id));
+  if(rec.s===409){ $('view').innerHTML='<div class="card"><span class="badge a">🟡 Not revealed yet</span><p class="exp">This is an instant pull that the player hasn’t revealed. It’s revealed by posting the clientSeed to <code>/gacha/reveal</code>; come back once it’s out.</p></div>'; return; }
+  if(rec.s===425){ $('view').innerHTML='<div class="card"><span class="badge a">🟢 round not published yet</span><p class="exp">A drand-bound batch whose future round hasn’t published. Reload in a few seconds — it settles automatically.</p></div>'; return; }
+  if(rec.s!==200||!rec.d||!rec.d.results){ $('view').innerHTML='<div class="card"><p class="muted">No gacha record for <b style="color:var(--ink)">'+esc(id)+'</b> on '+esc(BACKEND)+'.</p></div>'; return; }
+  renderResult(rec.d);
+}
+
+function linksBlock(rec, id){
+  var ru=BACKEND+'/gacha/'+encodeURIComponent(id);
+  var dr=(rec.drand&&rec.drand.verifyUrl)||'';
+  return '<div class="links">'+
+   '• Published record (JSON): <a href="'+ru+'" target="_blank" rel="noopener">registrar.uncloned.work/gacha/'+esc(id)+'</a><br>'+
+   (dr?'• Re-fetch the randomness from the public beacon: <a href="'+esc(dr)+'" target="_blank" rel="noopener">api.drand.sh round '+esc(rec.drand.round)+'</a><br>':'')+
+   '• Reference resolvers (JS / Python / Java / C++): <a href="https://github.com/constarik/uvs/tree/master/verifiers" target="_blank" rel="noopener">github.com/constarik/uvs</a>'+
+   '</div>';
+}
+
+function renderResult(rec){
+  var id=getId()||($('idIn').value||'').trim();
+  TIDX={}; (rec.rules&&rec.rules.tiers||[]).forEach(function(x,i){ TIDX[x.tier]=i; });
+  var ti=tierInfo(rec.tier);
+  var chips=(rec.results||[]).map(function(p){ return '<div class="chip '+chipClass(p.tier)+'">'+esc(p.tier)+(p.forced?'<span class="pity">pity</span>':'')+'<small>#'+p.i+'</small></div>'; }).join('');
+  var counts={}; (rec.results||[]).forEach(function(p){ counts[p.tier]=(counts[p.tier]||0)+1; });
+  var tally='Tally: '+Object.keys(counts).map(function(k){return '<b style="color:var(--ink)">'+counts[k]+'</b> '+esc(k);}).join(' · ');
+  var dr=rec.drand||null;
+  var att=rec.rulesAttestation||null;
+  var attHtml='';
+  if(att){ var ats=tsaList(att); attHtml='<h2>Odds — attested before the pull</h2><p class="exp">The drop table was published and timestamped'+(ats.length?' by '+ats.map(function(x){return esc(x.tsa);}).join(' and ')+' at '+iso(ats[0].genTime):'')+', <b>before</b> this pull — so the rates couldn’t be changed to suit the outcome (uvGacha §5).</p><div class="kv"><b>bannerId</b> '+esc(att.bannerId||'')+'</div>'; }
+  var oddsRows=(rec.rules&&rec.rules.tiers||[]).map(function(t){ return esc(t.tier)+' '+(t.rate/rec.rateDenominator*100).toFixed(2).replace(/\.00$/,'')+'%'; }).join(' · ');
+  var pity=rec.rules&&rec.rules.pity&&rec.rules.pity.tier? (' · pity: guaranteed '+esc(rec.rules.pity.tier)+' after '+rec.rules.pity.hardAfter+' misses') : '';
+  var beaconLine = dr&&dr.round? ('the public <b>drand</b> beacon — round '+esc(dr.round)+', published '+iso(dr.roundTime)+', whose value didn’t exist when the seed was committed') : ('a committed secret seed plus your own <b>clientSeed</b> (fixed after the commit, so neither side could grind it) — an instant pull, 🟡 by construction (uvGacha §6)');
+  var h='<div class="card"><span class="badge '+ti.cls+'">'+ti.txt+'</span>'+
+   '<h1>'+(rec.pullCount||(rec.results||[]).length)+' gacha pull'+((rec.pullCount||1)>1?'s':'')+'</h1>'+
+   '<p class="sub">sessionId '+esc(id)+' · drop table '+oddsRows+pity+'</p>'+
+   '<div class="pulls">'+chips+'</div><div class="tally">'+tally+'</div>'+
+   '<h2>Why you don’t have to trust the drop</h2>'+
+   '<p class="exp">Each pull is fixed by '+beaconLine+'. Nobody could steer it. You don’t have to take this on faith — recompute every pull yourself, right here:</p>'+
+   '<button class="go" id="reBtn">Recompute every pull yourself</button>'+
+   '<div id="steps"></div>'+
+   attHtml+
+   '<h2>The numbers</h2>'+
+   (dr?'<div class="kv"><b>drand randomness</b> '+esc(dr.randomness||'')+'</div>':'')+
+   '<div class="kv"><b>combined seed</b> '+esc(rec.combinedSeed||'')+'</div>'+
+   '<div class="kv"><b>server seed</b> '+esc(rec.serverSeed||'')+'</div>'+
+   '<div class="kv"><b>client seed</b> '+esc(rec.clientSeed||'')+'</div>'+
+   '<div class="kv"><b>commitment</b> '+esc(rec.commitment||'')+'</div>'+
+   '<details><summary>Raw record (for developers)</summary><pre>'+esc(JSON.stringify(rec,null,2))+'</pre></details>'+
+   '<h2>For developers</h2>'+linksBlock(rec,id)+
+   '</div>';
+  $('view').innerHTML=h;
+  $('reBtn').onclick=function(){ verify(rec); };
+}
+
+function tierOf(tiers,u){ var acc=0; for(var k=0;k<tiers.length;k++){ acc+=tiers[k].rate; if(u<acc) return tiers[k].tier; } return null; }
+function mk(s){ return s==='ok'?'<span class="ok">✓</span>':s==='err'?'<span class="err">✗</span>':s==='info'?'<span class="run">•</span>':'<span class="run">…</span>'; }
+function setStep(i,s,html){ var el=$('st'+i); if(el) el.innerHTML='<span class="mk">'+mk(s)+'</span><span class="tx">'+html+'</span>'; }
+async function verify(rec){
+  $('reBtn').disabled=true;
+  var labels=['Commitment','Public randomness','Combined seed','Every pull'];
+  $('steps').innerHTML=labels.map(function(l,i){return '<div class="step" id="st'+i+'"><span class="mk">'+mk('run')+'</span><span class="tx"><b>'+l+'</b> — checking…</span></div>';}).join('')+'<div class="verdict" id="vd"></div>';
+  var allok=true, rnd=(rec.drand&&rec.drand.randomness||'').toLowerCase(), hasBeacon=!!(rec.drand&&rec.drand.round);
+  try{
+    var ch=await sha256hex(rec.serverSeed||'');
+    var c1=ch===(rec.commitment||'').toLowerCase();
+    setStep(0,c1?'ok':'err','<b>Commitment</b> — SHA-256(serverSeed) '+(c1?'matches':'does NOT match')+' the value committed before the pulls.<small>'+ch+'</small>'); allok=allok&&c1;
+    if(hasBeacon){
+      var c2=false;
+      try{ var beacon=await (await fetch(rec.drand.verifyUrl)).json(); c2=(beacon.randomness||'').toLowerCase()===rnd;
+        setStep(1,c2?'ok':'err','<b>Public randomness</b> — re-fetched drand round '+esc(rec.drand.round)+'; its randomness '+(c2?'matches':'does NOT match')+' this record.<small>'+esc(beacon.randomness||'')+'</small>');
+      }catch(e){ setStep(1,'err','<b>Public randomness</b> — could not re-fetch the beacon ('+esc(e.message)+').'); }
+      allok=allok&&c2;
+    } else {
+      setStep(1,'info','<b>Public randomness</b> — instant pull: no public beacon (🟡 by construction, uvGacha §6). Anti-grind comes from your clientSeed, fixed after the server’s commit.');
+    }
+    var cs=await sha256hex((rec.serverSeed||'')+':'+(rec.clientSeed||'')+':'+rnd);
+    var c3=cs===(rec.combinedSeed||'').toLowerCase();
+    setStep(2,c3?'ok':'err','<b>Combined seed</b> — SHA-256(serverSeed : clientSeed : randomness) '+(c3?'reproduces':'does NOT reproduce')+' the published combined seed.<small>'+cs+'</small>'); allok=allok&&c3;
+    // replay every pull (uvGacha §3-§5, incl. pity)
+    var D=rec.rateDenominator, tiers=rec.rules.tiers, pity=rec.rules.pity&&rec.rules.pity.tier?rec.rules.pity:null;
+    var miss=0, c4=(rec.results||[]).length===rec.pullCount, mism=-1;
+    for(var i=1;i<=rec.pullCount && c4;i++){
+      var u=Number(BigInt('0x'+await sha256hex(cs+':'+i))%BigInt(D));
+      var tier,forced=false;
+      if(pity && miss+1>=pity.hardAfter){ tier=pity.tier; forced=true; } else tier=tierOf(tiers,u);
+      var pub=rec.results[i-1];
+      if(!pub||pub.tier!==tier||(!!pub.forced)!==forced){ c4=false; mism=i; }
+      miss=(pity && tier===pity.tier)?0:miss+1;
+    }
+    setStep(3,c4?'ok':'err','<b>Every pull</b> — replayed the resolver over the committed odds'+(pity?' and pity':'')+'; all '+rec.pullCount+' pulls '+(c4?'match':'DIVERGE (pull #'+mism+')')+' the published sequence.'); allok=allok&&c4;
+  }catch(e){ $('vd').innerHTML='<span class="err">Recompute error: '+esc(e.message)+'</span>'; $('reBtn').disabled=false; return; }
+  $('vd').innerHTML= allok? '<span class="ok">✓ All checks passed — these pulls are exactly what the public inputs produce. You just verified them without trusting the operator or this site.</span>' : '<span class="err">✗ A check failed — this record does not reconcile. Treat it as broken.</span>';
+  $('reBtn').disabled=false;
+}
+(function(){ var id=getId(); if(id){ $('idIn').value=id; load(id); } })();
+</script>
+</body></html>

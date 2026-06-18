@@ -170,8 +170,9 @@ function renderRecord(rec){
   $('result').style.display='block'; $('jsonBox').style.display='block';
 }
 function showRecLink(sid){ var el=$('recLink'); if(!sid){ el.style.display='none'; return; }
-  var url=BACKEND+'/gacha/'+sid;
-  el.innerHTML='<b>record by link</b> <a href="'+url+'" target="_blank" rel="noopener">'+url+'</a> — anyone can fetch &amp; replay it'; el.style.display='block'; }
+  var SITE=location.origin.indexOf('uncloned.work')>=0?'https://uvs.uncloned.work':location.origin;
+  var page=SITE+'/g/?id='+sid, raw=BACKEND+'/gacha/'+sid;
+  el.innerHTML='<b>record by link</b> <a href="'+page+'" target="_blank" rel="noopener">'+page+'</a> — anyone opens it, sees the pulls &amp; recomputes them in-browser (<a href="'+raw+'" target="_blank" rel="noopener">raw JSON</a>)'; el.style.display='block'; }
 $('goPull').onclick=async function(){
   var t=tiers(), D=parseInt($('den').value)||0;
   try{ validateRules(t,D); }catch(e){ $('status').innerHTML='<span class="err">'+e.message+'</span>'; return; }
