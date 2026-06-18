@@ -40,7 +40,7 @@ Backend endpoints (registrar):
 - `POST /gacha/reveal` `{ sessionId, clientSeed }` → the record (results + revealed serverSeed + notary). **🟡**
 - `POST /gacha/commit-batch` `{ rules, rateDenominator, pullCount, clientSeed, delaySeconds }` → binds to a future round; poll `POST /gacha/reveal { sessionId }` after the round publishes → **🟢** record with the drand value folded in.
 
-**Publish the record** (let the player download it or fetch it). Any player recomputes it with the reference resolver in JS / Python / Java / C++.
+**Publish the record** — let the player download it, or share the canonical link `registrar.uncloned.work/gacha/<sessionId>` (the gacha analogue of `/draws/:id`): anyone can fetch and replay it. Any player recomputes it with the reference resolver in JS / Python / Java / C++.
 
 ## The honest boundary (publish your odds)
 

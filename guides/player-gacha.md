@@ -6,7 +6,7 @@
 
 ## 1 · Get the record
 
-A pull session produces a record containing: the `serverSeed` (revealed after), your `clientSeed`, the `drand` round + randomness (for a 🟢 batch), the `rules` (drop table + any pity), `pullCount`, and the `results`. On [/gacha](https://uvs.uncloned.work/gacha) you can download it; an operator should publish or hand it to you.
+A pull session produces a record containing: the `serverSeed` (revealed after), your `clientSeed`, the `drand` round + randomness (for a 🟢 batch), the `rules` (drop table + any pity), `pullCount`, and the `results`. On [/gacha](https://uvs.uncloned.work/gacha) you can download it; an operator should publish or hand it to you. If you have the session id, fetch it directly: `registrar.uncloned.work/gacha/<sessionId>`.
 
 ## 2 · The 30-second checks
 
