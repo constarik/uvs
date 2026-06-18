@@ -1,6 +1,6 @@
 # Operator guide — running a verifiable draw (uvLottery)
 
-*For anyone running a raffle, prize draw, or allocation. UVS makes the **outcome** recomputable by anyone; you keep the sale, the funds, and the licence. Live console: [uvs.uncloned.work/run](https://uvs.uncloned.work/run). Spec: [`uvLs.md`](../uvLs.md).*
+*For anyone running a raffle, prize draw, or allocation. UVS makes the **outcome** recomputable by anyone; you keep the sale, the funds, and the licence. Live console: [uvs.uncloned.work/lottery](https://uvs.uncloned.work/lottery). Spec: [`uvLs.md`](../uvLs.md).*
 
 ---
 
@@ -12,7 +12,7 @@ A draw is **one seeded permutation**: a server seed is hashed with a public **dr
 
 ### Phase 1 — Open (before you sell anything)
 
-On [/run](https://uvs.uncloned.work/run), card ①:
+On [/lottery](https://uvs.uncloned.work/lottery), card ①:
 
 1. **Add your prize tiers.** Each tier is either a fixed number of winners, a **percent of entrants**, or **1-in-N** (the last two auto-scale to however many tickets actually sell — uvLs §6.1).
 2. **Label** the draw (shown to entrants).
@@ -23,7 +23,7 @@ On [/run](https://uvs.uncloned.work/run), card ①:
 
 ### Phase 2 — Close & draw (when sales end)
 
-On [/run](https://uvs.uncloned.work/run), card ②:
+On [/lottery](https://uvs.uncloned.work/lottery), card ②:
 
 1. Paste your **sold-ticket list** — one id per line, a comma list, a CSV (id = first column), or fetch it from a URL. Duplicates/blanks/junk are flagged.
 2. Enter **how many tickets you sold**. This is a *blind* cross-check against your list: the page says only ✓ matches / ✗ doesn't — never the direction or size of any gap — so you must reconcile your billing and your list independently.
