@@ -1,0 +1,121 @@
+<!doctype html><html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Open a gacha banner · UVS uvGacha operator</title>
+<style>
+:root{ --bg:#0e1116; --panel:#171b22; --line:#262c36; --ink:#e8edf4; --dim:#8b95a5;
+  --gold:#f2c14e; --blue:#6ea8fe; --green:#34d17e; --red:#ff5d6c; --purple:#b58cff; }
+*{box-sizing:border-box}
+body{margin:0;background:radial-gradient(1200px 600px at 50% -10%,#1a2230,#0e1116);color:var(--ink);
+  font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;min-height:100vh;
+  display:flex;flex-direction:column;align-items:center;padding:24px}
+.wrap{width:100%;max-width:680px}
+#errbar{display:none;background:#3a1014;border:1px solid #ff5d6c;color:#ffd7db;padding:10px 12px;border-radius:10px;margin-bottom:12px;font:12px ui-monospace,monospace;word-break:break-all}
+header{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;gap:10px}
+h1{font-size:19px;margin:0;letter-spacing:.2px}
+.badge{font-size:11px;padding:3px 9px;border-radius:999px;font-weight:600;white-space:nowrap;color:#f2dca0;background:rgba(242,193,78,.12);border:1px solid rgba(242,193,78,.4)}
+.tag{font-size:12.5px;color:var(--dim);margin:0 0 16px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px 16px;margin-bottom:14px}
+.card h2{font-size:12px;letter-spacing:.3px;color:var(--ink);margin:0 0 4px;font-weight:700}
+.card h2 .step{display:inline-block;width:20px;height:20px;line-height:20px;text-align:center;border-radius:50%;background:#1d2531;color:var(--gold);font-size:12px;margin-right:7px}
+.card .sub{font-size:12px;color:var(--dim);margin:0 0 12px}
+input,select{font:inherit;color:var(--ink);background:#11151b;border:1px solid var(--line);border-radius:9px;padding:9px 11px}
+input{width:100%}
+.trow{display:flex;gap:8px;align-items:center;margin-bottom:7px}
+.trow input.lbl{flex:1}
+.trow input.rate{width:120px}
+.trow .rm{cursor:pointer}
+.smallbtn{border:1px solid var(--line);background:#11151b;color:var(--dim);border-radius:8px;padding:7px 10px;cursor:pointer;font:inherit;font-size:13px}
+.row{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;align-items:center}
+.row label{font-size:12.5px;color:var(--dim)}
+.row input.s{width:110px}
+.mut{color:#6b7686;font-size:12px;line-height:1.5;margin-top:8px}
+.go{width:100%;padding:13px;border:0;border-radius:12px;font-size:15px;font-weight:800;letter-spacing:.3px;cursor:pointer;margin:8px 0 4px;background:linear-gradient(180deg,#f2c14e,#d9a02e);color:#1a1206}
+.go:disabled{opacity:.5;cursor:not-allowed}
+.status{font-size:13px;color:var(--dim);min-height:18px;margin:6px 0}
+.status .ok{color:var(--green)} .status .err{color:var(--red)} .status b{color:var(--ink)}
+.kv{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;color:var(--dim);word-break:break-all;margin:7px 0}
+.kv b{color:var(--ink)} .kv a{color:var(--blue)} .kv .ok{color:var(--green)}
+.ticket{background:#0f141b;border:1px dashed #3a4456;border-radius:10px;padding:12px;margin:10px 0;font-size:13px}
+.ticket .big{font-family:ui-monospace,monospace;font-size:15px;color:var(--gold);font-weight:700;letter-spacing:.5px}
+.lnk{color:var(--blue);text-decoration:none}
+</style></head><body><div class="wrap">
+<div id="errbar"></div>
+<header><h1>🎰 Open a gacha banner</h1><span class="badge">UVS · uvGacha Phase 0</span></header>
+<p class="tag">Operator console — the gacha twin of <a class="lnk" href="../../lottery/">/lottery</a>. <b>Attest the drop table before anyone pulls.</b> Publishing here timestamps your rates (and pity) at ×2 independent <b>RFC-3161</b> TSAs and hands you a <b>bannerId</b>. Players then pull against that id (<a class="lnk" href="../">/gacha?banner=…</a>); the odds are frozen and can't be swapped after a pull. This closes the "odds published before sales" boundary (<a class="lnk" href="https://github.com/constarik/uvs/blob/master/uvGacha.md" target="_blank" rel="noopener">uvGacha §5</a>).</p>
+
+<div class="card">
+  <h2><span class="step">1</span>Drop table</h2>
+  <p class="sub">Integer rates over a denominator <b>D</b> (parts-per-million by default). Rates MUST sum to exactly D — no floats (uvGacha §4).</p>
+  <div id="tiers"></div>
+  <button class="smallbtn" id="addTier">+ add tier</button>
+  <div class="row"><label>rateDenominator D</label><input id="den" class="s" type="number" min="1" value="1000000"></div>
+  <div class="mut" id="sumInfo"></div>
+  <div class="row" style="margin-top:10px">
+    <label><input type="checkbox" id="pityOn" style="width:auto"> hard pity:</label>
+    <span class="mut">guarantee</span> <select id="pityTier" style="width:120px"></select>
+    <span class="mut">after</span> <input id="pityN" class="s" type="number" min="1" value="90"> <span class="mut">misses</span>
+  </div>
+  <input id="label" placeholder="Banner label shown to players (e.g. June limited banner)" style="margin-top:12px">
+  <button class="go" id="goOpen">① Open — attest the drop table (×2 RFC-3161)</button>
+  <div class="status" id="status">Set a drop table, then open.</div>
+  <div id="result" style="display:none">
+    <div class="kv"><b>bannerId</b> <span id="rBanner" class="ok"></span></div>
+    <div class="kv"><b>rulesHash</b> <span id="rHash"></span></div>
+    <div class="kv"><b>attested at</b><br><span id="rTsas"></span></div>
+    <div class="ticket">Give players this link:<br>
+      <span class="big" id="rLink"></span><br>
+      <a class="lnk" id="rOpen" target="_blank" rel="noopener">open the player page ↗</a></div>
+  </div>
+</div>
+</div>
+<script>
+window.onerror=function(m,s,l,c,e){var b=document.getElementById('errbar');if(b){b.style.display='block';b.textContent='⚠ '+((e&&e.message)||m)+' @'+l+':'+c;}return false;};
+var $=function(id){return document.getElementById(id);};
+var BACKEND=new URLSearchParams(location.search).get('backend')||'https://registrar.uncloned.work';
+var SITE=location.origin.indexOf('uncloned.work')>=0?'https://uvs.uncloned.work':location.origin;
+function iso(t){ return t? new Date(t*1000).toISOString().replace('T',' ').replace('.000Z',' UTC') : '—'; }
+
+function addTier(label,rate){ var d=document.createElement('div'); d.className='trow';
+  d.innerHTML='<input class="lbl" placeholder="tier label (e.g. 5star)"><input class="rate" type="number" min="0" placeholder="rate (int)"><button class="smallbtn rm">✕</button>';
+  if(label!=null) d.querySelector('.lbl').value=label; if(rate!=null) d.querySelector('.rate').value=rate;
+  d.querySelector('.rm').onclick=function(){ d.remove(); refresh(); };
+  d.querySelectorAll('input').forEach(function(el){ el.addEventListener('input',refresh); });
+  $('tiers').appendChild(d); refresh(); }
+$('addTier').onclick=function(){ addTier('',''); };
+function tiers(){ var out=[]; document.querySelectorAll('#tiers .trow').forEach(function(d){
+  var l=d.querySelector('.lbl').value.trim(), r=parseInt(d.querySelector('.rate').value);
+  if(l && Number.isInteger(r)) out.push({tier:l,rate:r}); }); return out; }
+function refresh(){
+  var t=tiers(), D=parseInt($('den').value)||0, sum=t.reduce(function(a,x){return a+x.rate;},0);
+  var ok = sum===D && t.length>0;
+  $('sumInfo').innerHTML = t.length? ('&Sigma; rates = <b style="color:'+(ok?'var(--green)':'var(--red)')+'">'+sum+'</b> / D = '+D+(ok?' &check;':' &mdash; must equal D')) : 'add at least one tier';
+  var sel=$('pityTier'), cur=sel.value; sel.innerHTML=t.map(function(x){return '<option>'+x.tier+'</option>';}).join('');
+  if(cur) sel.value=cur;
+  $('goOpen').disabled=!ok;
+}
+$('den').addEventListener('input',refresh);
+
+$('goOpen').onclick=async function(){
+  var t=tiers(), D=parseInt($('den').value)||0;
+  var sum=t.reduce(function(a,x){return a+x.rate;},0);
+  if(!(sum===D && t.length>0)){ $('status').innerHTML='<span class="err">rates must sum to D and have ≥1 tier.</span>'; return; }
+  var rules={ tiers:t };
+  if($('pityOn').checked && $('pityTier').value) rules.pity={ tier:$('pityTier').value, hardAfter:Math.max(1,parseInt($('pityN').value)||1) };
+  $('goOpen').disabled=true; $('status').textContent='Attesting the drop table at ×2 RFC-3161 TSAs…';
+  var d;
+  try{ var r=await fetch(BACKEND+'/gacha/open',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({rules:rules,rateDenominator:D,label:$('label').value.trim()||null})});
+    d=await r.json(); if(!r.ok) throw new Error(d.error||'open failed'); }
+  catch(e){ $('status').innerHTML='<span class="err">open failed: '+e.message+'</span>'; $('goOpen').disabled=false; return; }
+  var tokens=(d.rulesAnchor&&d.rulesAnchor.tokens)||[];
+  $('rBanner').textContent=d.bannerId; $('rHash').textContent=(d.rulesHash||'').slice(0,32)+'…';
+  $('rTsas').innerHTML=tokens.map(function(x){return '<span class="ok">'+x.tsa+'</span> '+(x.genTime?iso(x.genTime):'—');}).join('<br>')||'—';
+  var link=SITE+'/gacha?banner='+d.bannerId;
+  $('rLink').textContent=link; $('rOpen').href=link;
+  $('result').style.display='block';
+  $('status').innerHTML='<span class="ok">Opened.</span> The drop table is frozen and timestamped. Share the bannerId; players pull against it.';
+  $('goOpen').disabled=false;
+};
+
+/* defaults: a familiar 0.6% / 9.1% / 90.3% banner */
+addTier('5star',6000); addTier('4star',91000); addTier('3star',903000); refresh();
+</script></body></html>

@@ -52,7 +52,7 @@ code{font-family:ui-monospace,monospace;background:#11151b;border:1px solid var(
 </style></head><body><div class="wrap">
 <div id="errbar"></div>
 <header><h1>🎰 Pull a verifiable gacha</h1><span class="badge">UVS · uvGacha 🟡 in-browser</span></header>
-<p class="tag">Every pull is a <b>fact you can recompute</b>, not a drop you trust. Set the drop table, pull, and reproduce the exact sequence yourself with the reference resolver — same inputs, same pulls, on any machine (<a class="lnk" href="https://github.com/constarik/uvs/blob/master/uvGacha.md" target="_blank" rel="noopener">uvGacha spec</a>). This page resolves in your browser (honest 🟡); commit-reveal and a drand-bound 🟢 batch run on the backend.</p>
+<p class="tag">Every pull is a <b>fact you can recompute</b>, not a drop you trust. Set the drop table, pull, and reproduce the exact sequence yourself with the reference resolver — same inputs, same pulls, on any machine (<a class="lnk" href="https://github.com/constarik/uvs/blob/master/uvGacha.md" target="_blank" rel="noopener">uvGacha spec</a>). This page resolves in your browser (honest 🟡); commit-reveal and a drand-bound 🟢 batch run on the backend. <b>Operator?</b> Attest your drop table first at <a class="lnk" href="open/">/gacha/open</a>, then share the bannerId.</p>
 
 <div class="card">
   <h2><span class="step">1</span>Drop table</h2>
@@ -102,6 +102,7 @@ window.onerror=function(m,s,l,c,e){var b=document.getElementById('errbar');if(b)
 var $=function(id){return document.getElementById(id);};
 var lastRecord=null;
 var BACKEND=new URLSearchParams(location.search).get('backend')||'https://registrar.uncloned.work';
+var BANNER=new URLSearchParams(location.search).get('banner')||null;
 async function api(p,body){ var r=await fetch(BACKEND+p,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
   var d=await r.json().catch(function(){return{};}); if(!r.ok) throw new Error((d&&d.error)||('HTTP '+r.status)); return d; }
 
@@ -176,6 +177,7 @@ $('goPull').onclick=async function(){
   try{ validateRules(t,D); }catch(e){ $('status').innerHTML='<span class="err">'+e.message+'</span>'; return; }
   if(!$('clientSeed').value.trim()) $('clientSeed').value=randHex(8);
   var mode=$('mode').value, cs=$('clientSeed').value.trim(), pc=Math.max(1,Math.min(300,parseInt($('pullCount').value)||1));
+  if(BANNER && mode==='local') mode='anchored';   // a committed banner must go through the backend so the attested rules are used
   var rules={ tiers:t };
   if($('pityOn').checked && $('pityTier').value) rules.pity={ tier:$('pityTier').value, hardAfter:Math.max(1,parseInt($('pityN').value)||1) };
   $('goPull').disabled=true; $('status').textContent='Resolving…';
@@ -187,12 +189,12 @@ $('goPull').onclick=async function(){
       renderRecord(rec); showRecLink(null); $('status').innerHTML='<span class="ok">Pulled (in-browser 🟡).</span> Recompute it yourself below.';
     } else if(mode==='anchored'){
       $('status').textContent='Committing serverSeed (neutral) + stamping…';
-      var c=await api('/gacha/commit',{ rules:rules, rateDenominator:D, pullCount:pc });
+      var c=await api('/gacha/commit',{ rules:rules, rateDenominator:D, pullCount:pc, bannerId:BANNER });
       var ra=await api('/gacha/reveal',{ sessionId:c.sessionId, clientSeed:cs });
       renderRecord(ra); showRecLink(c.sessionId); $('status').innerHTML='<span class="ok">Pulled (anchored 🟡 notary).</span> serverSeed was committed before your clientSeed.';
     } else {
       $('status').textContent='Committing + binding to a future drand round…';
-      var cb=await api('/gacha/commit-batch',{ rules:rules, rateDenominator:D, pullCount:pc, clientSeed:cs, delaySeconds:0 });
+      var cb=await api('/gacha/commit-batch',{ rules:rules, rateDenominator:D, pullCount:pc, clientSeed:cs, delaySeconds:0, bannerId:BANNER });
       $('status').innerHTML='Bound to drand round '+cb.round+'. Waiting for it to publish (~3s)…';
       var rb=null;
       for(var i=0;i<25;i++){
@@ -209,6 +211,26 @@ $('dlBtn').onclick=function(){ if(!lastRecord) return; var b=new Blob([JSON.stri
   var a=document.createElement('a'); a.href=URL.createObjectURL(b); a.download='gacha-record.json'; a.click(); };
 $('copyBtn').onclick=function(){ if(lastRecord) navigator.clipboard.writeText(JSON.stringify(lastRecord,null,2)); };
 
-/* defaults: a familiar 0.6% / 9.1% / 90.3% banner */
-addTier('5star',6000); addTier('4star',91000); addTier('3star',903000); $('clientSeed').value=randHex(8); refresh();
+function isoT(t){ return t? new Date(t*1000).toISOString().replace('T',' ').replace('.000Z',' UTC') : '—'; }
+async function loadBanner(id){
+  $('status').textContent='Loading committed banner '+id+'…';
+  var b; try{ b=await (await fetch(BACKEND+'/gacha/banner/'+encodeURIComponent(id))).json(); if(b.error) throw new Error(b.error); }
+  catch(e){ $('status').innerHTML='<span class="err">could not load banner '+id+': '+e.message+'</span>'; addTier('5star',6000); addTier('4star',91000); addTier('3star',903000); return; }
+  $('den').value=b.rateDenominator;
+  (b.rules.tiers||[]).forEach(function(t){ addTier(t.tier, t.rate); });
+  if(b.rules.pity && b.rules.pity.tier){ $('pityOn').checked=true; setTimeout(function(){ $('pityTier').value=b.rules.pity.tier; },0); $('pityN').value=b.rules.pity.hardAfter; }
+  document.querySelectorAll('#tiers input').forEach(function(el){ el.disabled=true; });   // odds are attested — locked here
+  ['den','pityN'].forEach(function(i){ $(i).disabled=true; }); $('pityOn').disabled=true; $('pityTier').disabled=true; $('addTier').style.display='none';
+  var tsas=(b.rulesAnchor&&b.rulesAnchor.tokens)||[];
+  var note=document.createElement('div'); note.className='card'; note.style.borderColor='rgba(52,209,126,.45)';
+  note.innerHTML='<h2>📌 Committed banner — odds frozen before this pull</h2>'+
+    '<div class="kv"><b>bannerId</b> '+id+(b.label?' &nbsp;·&nbsp; '+b.label.replace(/[<>]/g,''):'')+'</div>'+
+    '<div class="kv"><b>odds attested</b> '+(tsas.map(function(x){return x.tsa+' @ '+isoT(x.genTime);}).join(' · ')||'—')+' (×2 RFC-3161, uvGacha §5)</div>'+
+    '<div class="kv"><b>rulesHash</b> '+(b.rulesHash||'').slice(0,32)+'…</div>';
+  var card=$('tiers').parentNode; card.parentNode.insertBefore(note, card);
+  refresh(); $('status').textContent='Committed banner loaded — odds are frozen. Set your clientSeed and pull.';
+}
+/* init: load a committed banner if ?banner=, else demo defaults */
+if(BANNER){ loadBanner(BANNER); } else { addTier('5star',6000); addTier('4star',91000); addTier('3star',903000); }
+$('clientSeed').value=randHex(8); refresh();
 </script></body></html>
