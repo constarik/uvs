@@ -134,7 +134,7 @@ function renderResult(d, terms){
   var dr=d.drand||{};
   var tsas=tsaList(d.commitmentAnchor);
   var tsaWords=tsas.length? tsas.map(function(t){return esc(t.tsa);}).join(' and ')+' at '+iso(tsas[0].genTime) : 'an independent timestamping authority';
-  var nEnt=Array.isArray(d.participants)?d.participants.length:'—';
+  var nEnt=(Array.isArray(d.participants)&&d.participants.length)?d.participants.length:((d.result||[]).length||'—');
   var h='<div class="card"><span class="badge '+ti.cls+'">'+ti.txt+'</span>'+
    '<h1>'+esc(d.label||'Prize draw')+'</h1>'+
    '<p class="sub">drawId '+esc(d.drawId)+' · '+nEnt+' entrants'+(d.declaredCount!=null?' (organiser-declared '+d.declaredCount+', matched)':'')+'</p>'+
@@ -174,13 +174,14 @@ async function verify(d){
     var cs=await sha256hex((d.serverSeed||'')+':'+rnd);
     var c3=cs===(d.combinedSeed||'').toLowerCase();
     setStep(2,c3?'ok':'err','<b>Combined seed</b> — SHA-256(serverSeed : randomness) '+(c3?'reproduces':'does NOT reproduce')+' the published combined seed.<small>'+cs+'</small>'); allok=allok&&c3;
-    var ids=Array.isArray(d.participants)?d.participants.slice():[], scored=[];
+    var fromResult=!(Array.isArray(d.participants)&&d.participants.length);
+    var ids=fromResult?(d.result||[]).map(function(r){return r.id;}):d.participants.slice(), scored=[];
     for(var i=0;i<ids.length;i++){ scored.push({id:ids[i], score:await sha256hex(cs+':'+ids[i])}); }
     scored.sort(function(a,b){ if(a.score<b.score)return 1; if(a.score>b.score)return -1; return a.id<b.id?-1:(a.id>b.id?1:0); });
     var pub=(d.result||[]).slice().sort(function(a,b){return a.rank-b.rank;});
     var c4=scored.length===pub.length;
     for(var k=0;k<pub.length&&c4;k++){ if(scored[k].id!==pub[k].id || scored[k].score!==String(pub[k].score||'').toLowerCase()) c4=false; }
-    setStep(3,c4?'ok':'err','<b>Ranking</b> — recomputed every entrant’s score and put them in order; the ranking '+(c4?'matches':'does NOT match')+' the published winners exactly ('+scored.length+' entrants).'); allok=allok&&c4;
+    setStep(3,c4?'ok':'err','<b>Ranking</b> — recomputed every entrant’s score and put them in order; the ranking '+(c4?'matches':'does NOT match')+' the published result exactly ('+scored.length+' entrants'+(fromResult?', taken from the published result rows — this record stored no separate participants list':'')+').'); allok=allok&&c4;
   }catch(e){ $('vd').innerHTML='<span class="err">Recompute error: '+esc(e.message)+'</span>'; $('reBtn').disabled=false; return; }
   $('vd').innerHTML= allok? '<span class="ok">✓ All checks passed — this result is exactly what the public inputs produce. You just verified it without trusting the operator or this site.</span>' : '<span class="err">✗ A check failed — this draw does not reconcile. Treat it as broken.</span>';
   $('reBtn').disabled=false;
