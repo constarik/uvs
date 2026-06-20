@@ -1,0 +1,54 @@
+<!doctype html><html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>All draws — UVS</title>
+<meta name="description" content="Every revealed UVS draw, newest first. Click any to recompute the result yourself.">
+<style>
+ :root{ --bg:#0e1116; --panel:#171b22; --line:#262c36; --ink:#e8edf4; --dim:#8b95a5; --gold:#f2c14e; --blue:#6ea8fe; --green:#34d17e; --red:#ff5d6c; }
+ *{box-sizing:border-box}
+ body{margin:0;background:radial-gradient(1200px 600px at 50% -10%,#1a2230,#0e1116);color:var(--ink);font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:22px}
+ .wrap{width:100%;max-width:720px}
+ h1{font-size:22px;margin:0 0 4px}
+ .sub{color:var(--dim);font-size:13px;margin:0 0 16px}
+ .sub a{color:var(--blue);text-decoration:none}
+ .row{display:flex;gap:12px;align-items:center;padding:12px 14px;border:1px solid var(--line);border-radius:11px;background:var(--panel);margin-bottom:9px;text-decoration:none;color:var(--ink);transition:border-color .15s}
+ .row:hover{border-color:var(--blue)}
+ .tier{flex:none;font-size:12px;font-weight:700;padding:3px 9px;border-radius:999px}
+ .tier.g{color:#bfe3c9;background:rgba(52,209,126,.12);border:1px solid rgba(52,209,126,.4)}
+ .tier.a{color:#f3d79a;background:rgba(242,193,78,.12);border:1px solid rgba(242,193,78,.4)}
+ .tier.r{color:#ffc2c8;background:rgba(255,93,108,.12);border:1px solid rgba(255,93,108,.4)}
+ .mid{flex:1;min-width:0}
+ .lbl{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+ .meta{color:var(--dim);font-size:12px;font-family:ui-monospace,monospace;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+ .arrow{flex:none;color:var(--dim);font-size:18px}
+ .muted{color:var(--dim)}
+ .foot{color:#6b7686;font-size:11.5px;margin-top:18px;line-height:1.5}
+</style></head>
+<body><div class="wrap">
+ <h1>All draws</h1>
+ <p class="sub">Every revealed draw, newest first — click any to recompute it yourself. Draws opened but not yet drawn are on the <a href="/opens/">opened-draws ledger</a>.</p>
+ <div id="list"><p class="muted">Loading…</p></div>
+ <div class="foot">Source: registrar.uncloned.work/draws. UVS is an independent verification layer (uncloned.work) — not the organiser. Entries labelled "demo"/"smoke"/"example" are test draws.</div>
+</div>
+<script>
+var BACKEND=new URLSearchParams(location.search).get('backend')||'https://registrar.uncloned.work';
+function esc(s){return String(s==null?'':s).replace(/[&<>]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;'}[c];});}
+function tcls(t){t=String(t||'').toLowerCase();return t==='green'?'g':(t==='amber'||t==='yellow')?'a':'r';}
+function temoji(t){t=String(t||'').toLowerCase();return t==='green'?'🟢':(t==='amber'||t==='yellow')?'🟡':'🔴';}
+function when(iso){ if(!iso) return ''; return String(iso).replace('T',' ').replace(/\..+/,' UTC'); }
+(async function(){
+  try{
+    var d=await (await fetch(BACKEND+'/draws?limit=100')).json();
+    var items=(d&&d.items)||[];
+    if(!items.length){ document.getElementById('list').innerHTML='<p class="muted">No revealed draws yet.</p>'; return; }
+    document.getElementById('list').innerHTML=items.map(function(r){
+      var id=esc(r.drawId);
+      return '<a class="row" href="/d/?drawId='+id+'">'+
+        '<span class="tier '+tcls(r.tier)+'">'+temoji(r.tier)+' '+esc(r.tier||'')+'</span>'+
+        '<span class="mid"><div class="lbl">'+esc(r.label||'(no label)')+'</div>'+
+        '<div class="meta">'+(r.participants!=null?r.participants+' entrants · ':'')+id+' · '+esc(when(r.tsISO))+'</div></span>'+
+        '<span class="arrow">→</span></a>';
+    }).join('');
+  }catch(e){ document.getElementById('list').innerHTML='<p class="muted">Could not load the list: '+esc(e.message)+'</p>'; }
+})();
+</script>
+</body></html>
