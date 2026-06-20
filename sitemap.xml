@@ -6,5 +6,7 @@
   <url><loc>https://uvs.uncloned.work/lottery/</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
   <url><loc>https://uvs.uncloned.work/gacha/</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
   <url><loc>https://uvs.uncloned.work/gacha/open/</loc><changefreq>monthly</changefreq><priority>0.5</priority></url>
+  <url><loc>https://uvs.uncloned.work/g-records/</loc><changefreq>weekly</changefreq><priority>0.5</priority></url>
+  <url><loc>https://uvs.uncloned.work/g-banners/</loc><changefreq>weekly</changefreq><priority>0.5</priority></url>
   <url><loc>https://uvs.uncloned.work/draw/</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
 </urlset>

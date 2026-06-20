@@ -63,6 +63,7 @@
   <header><h1>⚓ Run an anchored draw</h1><span class="badge" title="Trust tier is derived from evidence, not claimed (uvLs §5.4).">UVS · 🟢 anchored</span></header>
   <p class="tag">Operator console. <b>Two phases, one draw.</b> ① <b>Open</b> fixes the prizes and timestamps them at ×2 independent <b>RFC-3161</b> TSAs <i>before</i> you sell tickets (<a class="lnk" href="https://github.com/constarik/uvs/blob/master/uvLs.md" target="_blank" rel="noopener">uvLs §5.5</a>) and hands you a <b>drawId</b> to print on every ticket. ② <b>Close</b> later (or right away) with the final entrants — the backend binds the outcome to a future <b>drand</b> round and reveals on its own. Your entrants <b>recompute</b> the result themselves.</p>
   <div class="mut" style="border:1px solid #3a2f12;background:rgba(242,193,78,.07);border-radius:9px;padding:8px 11px;margin:0 0 14px;color:#cbb274">⚙ <b style="color:var(--ink)">Demo — open access.</b> Anyone can run a draw here. In production, access is gated by operator identity, or you self-host the registrar (MIT). The verification guarantee holds either way — a stranger's draw can't forge yours.</div>
+  <div class="mut" style="margin:0 0 14px">📋 Browse: <a class="lnk" href="/draws/">all draws</a> · <a class="lnk" href="/opens/">opened-draws ledger</a></div>
 
   <!-- ① OPEN -->
   <div class="card" id="openCard">
