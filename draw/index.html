@@ -91,7 +91,7 @@
     <div class="kv"><b>future drand round R</b> <span id="aRound">—</span></div>
     <div class="kv"><b>RFC-3161 anchors</b><br><span id="aTsas">—</span></div>
     <div class="kv"><b>§5.4 — stamped before R?</b> <span id="aOk">—</span></div>
-    <div class="kv"><b>OTS second anchor</b> <span id="aOts">—</span></div>
+    <div class="kv" id="aOtsRow" style="display:none"><b>OTS second anchor</b> <span id="aOts">—</span></div>
   </div>
 
   <div class="you" id="youCard" style="display:none">
@@ -288,7 +288,7 @@ async function runAnchored(){
   $('aTsas').innerHTML = tokens.length ? tokens.map(function(t){ return '<span class="ok">'+t.tsa+'</span> '+(t.genTime? new Date(t.genTime*1000).toISOString().replace('T',' ').replace('.000Z',' UTC'):'—'); }).join('<br>') : '—';
   var beforeCount=tokens.filter(function(t){return t.genTime&&t.genTime<Rtime;}).length;
   $('aOk').innerHTML = beforeCount>=1 ? '<span class="ok">YES ✓ '+beforeCount+'/'+tokens.length+' independent TSAs stamped before R</span>' : '<span class="err">NO</span>';
-  $('aOts').innerHTML = (commit.ots&&commit.ots.proof) ? '<span class="ok">submitted</span> · '+(commit.ots.status||'pending') : '<span class="warn">not enabled</span>';
+  if(commit.ots&&commit.ots.proof){ $('aOts').innerHTML='<span class="ok">submitted</span> · '+(commit.ots.status||'pending'); $('aOtsRow').style.display=''; } else { $('aOtsRow').style.display='none'; }
   $('anchorCard').style.display='block';
   $('status').innerHTML='Committed. Waiting for drand round '+commit.round+' to publish…';
 
