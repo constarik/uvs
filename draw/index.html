@@ -193,9 +193,9 @@ var PRESETS=[
     tiers:[{key:'seat',label:'Seat',count:25,color:'#34d17e'},{key:'none',label:'No seat',count:75,color:'#8b95a5'}] },
   { name:'School places (allocation)', note:'15 places + 10 waitlist among 100 applicants — a civic draw, no casino.', prefix:'APPLICANT-', pad:3, M:100,
     tiers:[{key:'placed',label:'Placed',count:15,color:'#34d17e'},{key:'waitlist',label:'Waitlist',count:10,color:'#f2c14e'},{key:'none',label:'Not placed',count:75,color:'#8b95a5'}] },
-  { name:'Lottery 5 of 36', note:'pick 5 of 36 — the top 5 of the seeded order are the drawn numbers; any number lottery (6/45, 5/50…) is the same primitive.', prefix:'', pad:2, M:36,
+  { name:'Lottery 5 of 36', note:'pick 5 of 36 — the top 5 of the seeded order are the drawn numbers; any number lottery (6/45, 5/50…) is the same primitive.', prefix:'', pad:2, M:36, noYou:true,
     tiers:[{key:'drawn',label:'Drawn',count:5,color:'#34d17e'},{key:'none',label:'Not drawn',count:31,color:'#8b95a5'}] },
-  { name:'Card shuffle (deal a hand)', note:'a 52-card deck permuted by the same primitive = a provably-fair shuffle; here the top 5 are dealt as a hand.', M:52,
+  { name:'Card shuffle (deal a hand)', note:'a 52-card deck permuted by the same primitive = a provably-fair shuffle; here the top 5 are dealt as a hand.', M:52, noYou:true,
     ids:(function(){var su=['S','H','D','C'],ra=['A','2','3','4','5','6','7','8','9','10','J','Q','K'],d=[];for(var s=0;s<su.length;s++)for(var r=0;r<ra.length;r++)d.push(ra[r]+su[s]);return d;})(),
     tiers:[{key:'hand',label:'Dealt hand (top 5)',count:5,color:'#34d17e'},{key:'deck',label:'Rest of the deck',count:47,color:'#8b95a5'}] }
 ];
@@ -223,10 +223,12 @@ function tierBuckets(rec){ var cum=[],c=0; rec.tiers.forEach(function(t){c+=t.co
 /* render the distribution + "you" + proof + share + download from the global `current` */
 function renderAll(rec){
   var c=current;
-  var youId=rec.ids?rec.ids[Math.floor(Math.random()*rec.ids.length)]:rec.prefix+String(1+Math.floor(Math.random()*rec.M)).padStart(rec.pad,'0'); var you=c.byId[youId];
-  $('youId').textContent='You are '+youId;
-  $('youRes').textContent=you.tier.label; $('youRes').style.color=you.tier.color;
-  $('youWhy').textContent='rank '+you.rank.toLocaleString()+' of '+rec.M.toLocaleString()+' — re-derive it yourself below, or with any verifier.';
+  if(!rec.noYou){
+    var youId=rec.ids?rec.ids[Math.floor(Math.random()*rec.ids.length)]:rec.prefix+String(1+Math.floor(Math.random()*rec.M)).padStart(rec.pad,'0'); var you=c.byId[youId];
+    $('youId').textContent='You are '+youId;
+    $('youRes').textContent=you.tier.label; $('youRes').style.color=you.tier.color;
+    $('youWhy').textContent='rank '+you.rank.toLocaleString()+' of '+rec.M.toLocaleString()+' — re-derive it yourself below, or with any verifier.';
+  }
 
   var box=$('chips'); box.innerHTML='';
   rec.tiers.forEach(function(t){
@@ -247,7 +249,7 @@ function renderAll(rec){
   var pIdx=parseInt($('preset').value)||0;
   var shareUrl='/results/?p='+pIdx+'&seed='+c.serverSeed+'&round='+c.drand.round+'&rand='+c.drand.randomness;
   $('shareLine').innerHTML='<a href="'+shareUrl+'" target="_blank" rel="noopener" style="color:var(--blue)">🔗 Share this result (permalink) ↗</a> — opens the exact same finished draw for anyone to re-open &amp; verify.';
-  $('youCard').style.display='block'; $('distCard').style.display='block'; $('proof').style.display='block'; $('dlbar').style.display='block';
+  $('youCard').style.display=rec.noYou?'none':'block'; $('distCard').style.display='block'; $('proof').style.display='block'; $('dlbar').style.display='block';
 }
 
 /* ── 🟡 in-browser draw (no server) ── */
