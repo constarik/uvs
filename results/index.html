@@ -164,7 +164,19 @@ var PRESETS=[
     serverSeed:'c3f5a7091b2d4e6f80a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f6071',
     drand:{round:29286636,randomness:'e8d0543d60b639cf02775d16d8bc66f281b7bcbdf59706f29a1684889f8b9548'},
     M:2000, prefix:'APPLICANT-', pad:5,
-    tiers:[{key:'placed',label:'Placed',count:300,color:'#34d17e'},{key:'waitlist',label:'Waitlist',count:200,color:'#f2c14e'},{key:'none',label:'Not placed',count:1500,color:'#8b95a5'}] }
+    tiers:[{key:'placed',label:'Placed',count:300,color:'#34d17e'},{key:'waitlist',label:'Waitlist',count:200,color:'#f2c14e'},{key:'none',label:'Not placed',count:1500,color:'#8b95a5'}] },
+  { id:'lotto536', name:'Lottery 5 of 36', note:'top 5 of the seeded order = the drawn numbers',
+    title:'Lottery — 5 of 36',
+    serverSeed:'d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f6071829a1b2c3d4e5f607182930',
+    drand:{round:29286636,randomness:'e8d0543d60b639cf02775d16d8bc66f281b7bcbdf59706f29a1684889f8b9548'},
+    M:36, prefix:'', pad:2,
+    tiers:[{key:'drawn',label:'Drawn',count:5,color:'#34d17e'},{key:'none',label:'Not drawn',count:31,color:'#8b95a5'}] },
+  { id:'cards', name:'Card shuffle (deal a hand)', note:'a provably-fair 52-card shuffle; top 5 dealt as a hand',
+    title:'Card shuffle — deal a hand',
+    serverSeed:'e5f60718293a4b5c6d7e8f90a1b2c3d4e5f6071829a1b2c3d4e5f60718293041',
+    drand:{round:29286636,randomness:'e8d0543d60b639cf02775d16d8bc66f281b7bcbdf59706f29a1684889f8b9548'},
+    M:52, ids:(function(){var su=['♠','♥','♦','♣'],ra=['A','2','3','4','5','6','7','8','9','10','J','Q','K'],d=[];for(var s=0;s<su.length;s++)for(var r=0;r<ra.length;r++)d.push(ra[r]+su[s]);return d;})(),
+    tiers:[{key:'hand',label:'Dealt hand (top 5)',count:5,color:'#34d17e'},{key:'deck',label:'Rest of the deck',count:47,color:'#8b95a5'}] }
 ];
 var $=function(id){return document.getElementById(id);};
 function idOf(rec,i){return rec.prefix+String(i+1).padStart(rec.pad,'0');}
@@ -172,7 +184,8 @@ var current=null;
 
 function build(rec){
   var combined=sha256hex(rec.serverSeed+':'+rec.drand.randomness);
-  var arr=[]; for(var i=0;i<rec.M;i++){var id=idOf(rec,i); arr.push({id:id,score:sha256hex(combined+':'+id)});}
+  var ids=rec.ids?rec.ids.slice():(function(){var a=[];for(var i=0;i<rec.M;i++)a.push(idOf(rec,i));return a;})();
+  var arr=ids.map(function(id){return {id:id,score:sha256hex(combined+':'+id)};});
   arr.sort(function(a,b){ if(a.score>b.score)return -1; if(a.score<b.score)return 1; return a.id<b.id?-1:a.id>b.id?1:0; });
   var cum=[],c=0; rec.tiers.forEach(function(t){c+=t.count;cum.push(c);});
   function tierAtRank(rank){ for(var j=0;j<rec.tiers.length;j++){ if(rank<=cum[j]) return rec.tiers[j]; } return rec.tiers[rec.tiers.length-1]; }
