@@ -187,12 +187,12 @@ async function pollRound(R,statusEl){
 
 /* ── presets: one live engine, different prize pools ── */
 var PRESETS=[
-  { name:'Gacha banner', note:'published drop rates — 2,000 pulls; exactly 1% land Legendary, and you can see which.', prefix:'PULL-', pad:5, M:2000,
-    tiers:[{key:'legendary',label:'Legendary',count:20,color:'#f2c14e'},{key:'epic',label:'Epic',count:180,color:'#b06efe'},{key:'rare',label:'Rare',count:600,color:'#6ea8fe'},{key:'common',label:'Common',count:1200,color:'#8b95a5'}] },
-  { name:'Event tickets (lottery)', note:'500 seats among 2,000 applicants — every loser can re-derive their own rank.', prefix:'TICKET-', pad:5, M:2000,
-    tiers:[{key:'seat',label:'Seat',count:500,color:'#34d17e'},{key:'none',label:'No seat',count:1500,color:'#8b95a5'}] },
-  { name:'School places (allocation)', note:'300 places + 200 waitlist among 2,000 applicants — a civic draw, no casino.', prefix:'APPLICANT-', pad:5, M:2000,
-    tiers:[{key:'placed',label:'Placed',count:300,color:'#34d17e'},{key:'waitlist',label:'Waitlist',count:200,color:'#f2c14e'},{key:'none',label:'Not placed',count:1500,color:'#8b95a5'}] }
+  { name:'Gacha banner', note:'published drop rates — 100 pulls; exactly 1% land Legendary, and you can see which.', prefix:'PULL-', pad:3, M:100,
+    tiers:[{key:'legendary',label:'Legendary',count:1,color:'#f2c14e'},{key:'epic',label:'Epic',count:9,color:'#b06efe'},{key:'rare',label:'Rare',count:30,color:'#6ea8fe'},{key:'common',label:'Common',count:60,color:'#8b95a5'}] },
+  { name:'Event tickets (lottery)', note:'25 seats among 100 applicants — every loser can re-derive their own rank.', prefix:'TICKET-', pad:3, M:100,
+    tiers:[{key:'seat',label:'Seat',count:25,color:'#34d17e'},{key:'none',label:'No seat',count:75,color:'#8b95a5'}] },
+  { name:'School places (allocation)', note:'15 places + 10 waitlist among 100 applicants — a civic draw, no casino.', prefix:'APPLICANT-', pad:3, M:100,
+    tiers:[{key:'placed',label:'Placed',count:15,color:'#34d17e'},{key:'waitlist',label:'Waitlist',count:10,color:'#f2c14e'},{key:'none',label:'Not placed',count:75,color:'#8b95a5'}] }
 ];
 var $=function(id){return document.getElementById(id);};
 var current=null;
