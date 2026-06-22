@@ -195,7 +195,7 @@ var PRESETS=[
     tiers:[{key:'placed',label:'Placed',count:15,color:'#34d17e'},{key:'waitlist',label:'Waitlist',count:10,color:'#f2c14e'},{key:'none',label:'Not placed',count:75,color:'#8b95a5'}] },
   { name:'Lottery 5 of 36', note:'pick 5 of 36 — the top 5 of the seeded order are the drawn numbers; any number lottery (6/45, 5/50…) is the same primitive.', prefix:'', pad:2, M:36, noYou:true,
     tiers:[{key:'drawn',label:'Drawn',count:5,color:'#34d17e'},{key:'none',label:'Not drawn',count:31,color:'#8b95a5'}] },
-  { name:'Card shuffle', note:'a 52-card deck permuted by the same primitive — a provably-fair shuffle; anyone reproduces the exact deck order.', M:52, noYou:true,
+  { name:'Card shuffle', note:'a provably-fair 52-card shuffle anyone reproduces — the operator can\'t rig it. For live card games, add a per-player clientSeed so the operator can\'t know the order in advance either (uvGame).', M:52, noYou:true,
     ids:(function(){var su=['S','H','D','C'],ra=['A','2','3','4','5','6','7','8','9','10','J','Q','K'],d=[];for(var s=0;s<su.length;s++)for(var r=0;r<ra.length;r++)d.push(ra[r]+su[s]);return d;})(),
     tiers:[{key:'deck',label:'Shuffled deck',count:52,color:'#34d17e'}] }
 ];
