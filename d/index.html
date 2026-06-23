@@ -116,7 +116,7 @@ function linksBlock(d){
 
 function renderOffer(id, terms){
   $('view').innerHTML='<div class="card"><span class="badge a">🟡 Not drawn yet — terms published</span>'+
-   '<h1>'+esc(terms.label||'Prize draw')+'</h1>'+
+   '<h1>'+esc(terms.label||'Draw')+'</h1>'+
    '<p class="sub">drawId '+esc(id)+'</p>'+
    '<p class="exp">The prizes below were fixed and timestamped <b>before any ticket was sold</b>. The winner has not been drawn yet — come back after the draw closes to recompute the result yourself.</p>'+
    '<div class="kv"><b>Prizes</b> '+prizeText(terms.prizePool)+'</div>'+
@@ -128,20 +128,22 @@ function renderOffer(id, terms){
 
 function renderResult(d, terms){
   var ti=tierInfo(d.tier);
+  var model=d.model||'', isAlloc=/alloc/i.test(model);
+  var titleName=d.label||model||'Draw';
   var winners=(d.result||[]).filter(function(r){return r.prize;});
   var winHtml=winners.length? winners.map(function(r){
     return '<div class="win"><span class="rk">#'+r.rank+'</span><span class="id">'+esc(r.id)+'</span><span class="pz">'+esc(r.prize)+'</span></div>';
-  }).join('') : '<p class="muted">No prize tier resolved for this draw.</p>';
+  }).join('') : '<p class="muted">'+(isAlloc?'No outcome resolved for this draw.':'No prize tier resolved for this draw.')+'</p>';
   var dr=d.drand||{};
   var tsas=tsaList(d.commitmentAnchor);
   var tsaWords=tsas.length? tsas.map(function(t){return esc(t.tsa);}).join(' and ')+' at '+iso(tsas[0].genTime) : 'an independent timestamping authority';
   var nEnt=(Array.isArray(d.participants)&&d.participants.length)?d.participants.length:((d.result||[]).length||'—');
   var h='<div class="card"><span class="badge '+ti.cls+'">'+ti.txt+'</span>'+
-   '<h1>'+esc(d.label||'Prize draw')+'</h1>'+
+   '<h1>'+esc(titleName)+'</h1>'+
    '<p class="sub">drawId '+esc(d.drawId)+' · '+nEnt+' entrants'+(d.declaredCount!=null?' (organiser-declared '+d.declaredCount+', matched)':'')+'</p>'+
-   '<h2>Winner'+(winners.length>1?'s':'')+'</h2>'+winHtml+
+   '<h2>'+(isAlloc?'Result':'Winner'+(winners.length>1?'s':''))+'</h2>'+winHtml+
    '<h2>Why you don’t have to trust anyone</h2>'+
-   '<p class="exp">The winner was fixed by the public <b>drand</b> randomness beacon — round '+esc(dr.round)+', published '+iso(dr.roundTime)+'. The prizes and the secret seed were timestamped by '+tsaWords+', <b>before</b> that randomness existed, so no one could steer the outcome. You don’t have to take this on faith — recompute it yourself, right here in your browser:</p>'+
+   '<p class="exp">'+(isAlloc?'The allocation':'The winner')+' was fixed by the public <b>drand</b> randomness beacon — round '+esc(dr.round)+', published '+iso(dr.roundTime)+'. The published rules and the secret seed were timestamped by '+tsaWords+', <b>before</b> that randomness existed, so no one could steer the outcome. You don’t have to take this on faith — recompute it yourself, right here in your browser:</p>'+
    '<button class="go" id="reBtn">Recompute it yourself</button>'+
    '<div id="steps"></div>'+
    '<h2>The numbers</h2>'+
