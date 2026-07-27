@@ -239,9 +239,13 @@ const REPO_API = 'https://api.github.com/repos/constarik/uvs';
 S('btnCheckTok').onclick = async () => {
   PAT = S('patInput').value.trim() || null;
   if (!PAT) { S('tokStatus').textContent = 'no token'; return; }
-  const r = await fetch(REPO_API, { headers: { Authorization: 'Bearer ' + PAT } });
-  S('tokStatus').textContent = r.ok ? 'token OK (repo visible)' : 'rejected: HTTP ' + r.status;
-  S('tokStatus').className = r.ok ? 'ok' : 'err';
+  const H = { Authorization: 'Bearer ' + PAT };
+  const meta = await fetch(REPO_API, { headers: H });
+  if (!meta.ok) { S('tokStatus').textContent = 'rejected: HTTP ' + meta.status; S('tokStatus').className = 'err'; return; }
+  const git = await fetch(REPO_API + '/git/ref/heads/master', { headers: H });
+  if (git.ok) { S('tokStatus').textContent = 'token OK — Git Data API available (atomic commits)'; S('tokStatus').className = 'ok'; }
+  else { S('tokStatus').textContent = 'repo visible, but Git Data API -> HTTP ' + git.status
+         + ' — will fall back to Contents API (sequential commits)'; S('tokStatus').className = 'err'; }
 };
 
 // ---- operator: init draw (v0.3) --------------------------------------------

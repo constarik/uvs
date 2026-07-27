@@ -1,6 +1,9 @@
-// uvl-gh v0.1 — atomic multi-file commits to constarik/uvs via the GitHub Git Data API.
-// One operator action = one commit (blob → tree → commit → ref), SHA reported back.
-// Used by the console for chain links and draw init; never for code (spec: data only).
+// uvl-gh v0.2 — commits to constarik/uvs from the console.
+// Preferred path: atomic multi-file commit via the Git Data API (blob→tree→commit→ref).
+// Fallback (v0.2): some fine-grained PATs get HTTP 403 on /git/* — then the Contents
+// API is used instead: one commit per file, ordered so the pointer file (chain.json,
+// index.json) lands LAST. A failure mid-sequence leaves an unreferenced data file,
+// which is harmless; the pointer never references anything that is not yet committed.
 (function (root) {
   'use strict';
   const API = 'https://api.github.com/repos/constarik/uvs';
@@ -31,8 +34,18 @@
     return [...new Uint8Array(d)].map(b => b.toString(16).padStart(2, '0')).join('');
   }
 
-  // files: [{path, text}] or [{path, buffer}] — committed atomically.
+  // files: [{path, text}] or [{path, buffer}]. Atomic when the token allows /git/*;
+  // otherwise sequential Contents-API commits in the given order (put pointers last).
   async function commitFiles(pat, message, files) {
+    try {
+      return await commitAtomic(pat, message, files);
+    } catch (e) {
+      if (!/HTTP 403/.test(String(e.message))) throw e;
+      return await commitSequential(pat, message, files) + ' (sequential fallback)';
+    }
+  }
+
+  async function commitAtomic(pat, message, files) {
     const ref = await gh(pat, '/git/ref/heads/' + BRANCH);
     const headSha = ref.object.sha;
     const head = await gh(pat, '/git/commits/' + headSha);
@@ -50,6 +63,26 @@
     await gh(pat, '/git/refs/heads/' + BRANCH, { method: 'PATCH',
       body: JSON.stringify({ sha: commit.sha, force: false }) });
     return commit.sha;
+  }
+
+  async function commitSequential(pat, message, files) {
+    let last = null;
+    for (let i = 0; i < files.length; i++) {
+      const f = files[i];
+      const b64 = f.buffer ? bufToBase64(f.buffer)
+                           : btoa(unescape(encodeURIComponent(f.text)));
+      // update needs the current file sha, if the file exists
+      let sha;
+      const probe = await fetch(API + '/contents/' + f.path + '?ref=' + BRANCH,
+        { headers: { Authorization: 'Bearer ' + pat, Accept: 'application/vnd.github+json' } });
+      if (probe.ok) sha = (await probe.json()).sha;
+      const body = { message: message + ' [' + (i+1) + '/' + files.length + ']',
+                     content: b64, branch: BRANCH };
+      if (sha) body.sha = sha;
+      const res = await gh(pat, '/contents/' + f.path, { method: 'PUT', body: JSON.stringify(body) });
+      last = res.commit.sha;
+    }
+    return last;
   }
 
   root.uvlGh = { commitFiles: commitFiles, sha256Hex: sha256Hex };
