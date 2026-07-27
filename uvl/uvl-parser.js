@@ -10,7 +10,7 @@
   else root.uvlParser = factory();
 })(typeof self !== 'undefined' ? self : this, function () {
   'use strict';
-  const VERSION = '0.1';
+  const VERSION = '0.2';
   const ANCHOR = 'id="replaceableComment_urn:li:comment:(';
 
   // §5 — canonical form `linkedin.com/in/<slug>` or null if not a person profile.
@@ -25,7 +25,10 @@
     u = u.replace(/^linkedin\.com\/mwlite\/in\//i, 'linkedin.com/in/'); // mobile
     const m = u.match(/^linkedin\.com\/in\/([^\/]+)/i);   // path tail: keep /in/<slug>
     if (!m) return null;                           // company pages etc. drop out
-    const slug = decodeURIComponent(m[1]).toLowerCase().replace(/\/+$/, '');
+    // v0.2: decodeURIComponent throws on malformed % sequences — fall back to raw
+    let slug = m[1];
+    try { slug = decodeURIComponent(slug); } catch (e) { /* keep raw */ }
+    slug = slug.toLowerCase().replace(/\/+$/, '');
     if (!slug) return null;
     return 'linkedin.com/in/' + slug;
   }
