@@ -251,14 +251,15 @@ S('btnCheckTok').onclick = async () => {
 // ---- operator: init draw (v0.3) --------------------------------------------
 const DATA_ROOT = TEST ? 'uvl-test' : 'uvl';      // repo path root for data commits
 function needPat() { if (!PAT) throw new Error('paste and check a token first'); }
+S('newDrawId').oninput = S('newDrawTitle').oninput = () => { S('initStatus').textContent = ''; };
 S('btnInitDraw').onclick = async () => {
+  const id = S('newDrawId').value.trim();
   try {
     needPat();
-    const id = S('newDrawId').value.trim();
     const title = S('newDrawTitle').value.trim() || id;
-    if (!/^[a-z0-9][a-z0-9-]{2,60}$/.test(id)) throw new Error('id: lowercase letters, digits, dashes');
-    if (TEST && !id.startsWith('test-')) throw new Error('rehearsal draw ids must start with "test-" (§16.3)');
-    if (!TEST && id.startsWith('test-')) throw new Error('"test-" ids belong in /uvl-test/ (§16.3)');
+    if (!/^[a-z0-9][a-z0-9-]{2,60}$/.test(id)) throw new Error('"' + id + '" — id: lowercase letters, digits, dashes');
+    if (TEST && !id.startsWith('test-')) throw new Error('"' + id + '" — rehearsal draw ids must start with "test-" (§16.3)');
+    if (!TEST && id.startsWith('test-')) throw new Error('"' + id + '" — "test-" ids belong in /uvl-test/ (§16.3)');
     if (state.draw) throw new Error('a draw is already active: ' + state.draw);
     S('initStatus').textContent = 'committing…';
     const meta = { id: id, title: title, summary: '', prize: '', links: {} };
