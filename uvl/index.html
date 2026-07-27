@@ -267,7 +267,9 @@ S('btnInitDraw').onclick = async () => {
       { path: DATA_ROOT + '/draws/index.json', text: JSON.stringify({ active: id }, null, 2) },
       { path: DATA_ROOT + '/draws/' + id + '/meta.json', text: JSON.stringify(meta, null, 2) }
     ]);
-    S('initStatus').innerHTML = '<span class="ok">commit ' + sha.slice(0,7) + '</span> — reload after Pages rebuilds (~1 min)';
+    S('initStatus').innerHTML = '<span class="ok">commit ' + sha.slice(0,7) + '</span> — draw is active; you can upload a dump right away';
+    state.draw = id; state.meta = meta; state.chain = null;   // live without reload (v0.3.4)
+    render();
   } catch (e) { S('initStatus').innerHTML = '<span class="err">' + e.message + '</span>'; }
 };
 
