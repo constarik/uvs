@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- uvl index.html v0.2 — UVS Lottery draw page + operator console.
+<!-- uvl index.html v0.3 — UVS Lottery draw page + operator console.
      Self-contained by spec §15.2: no CDN, no external CSS/fonts, no analytics.
      Network calls are protocol only: ./draws/*.json (same origin), GitHub API
      (operator actions), drand (round check). Test mode = /uvl-test/ in path. -->
@@ -99,6 +99,18 @@
       <button id="btnCheckTok">check token</button><span id="tokStatus" class="muted"></span>
     </div>
     <hr style="border:none;border-top:1px solid var(--line)">
+    <h2>Init draw</h2>
+    <p class="muted">Creates <span class="hash">draws/index.json</span> + a metadata
+    skeleton and makes the draw active. One active draw at a time.</p>
+    <div class="row">
+      <input type="text" id="newDrawId" placeholder="draw id, e.g. test-uvl-2026-07-27-dryrun" style="flex:1">
+    </div>
+    <div class="row">
+      <input type="text" id="newDrawTitle" placeholder="title, e.g. Dry run" style="flex:1">
+      <button id="btnInitDraw" class="primary">init draw</button>
+      <span id="initStatus" class="muted"></span>
+    </div>
+    <hr style="border:none;border-top:1px solid var(--line)">
     <h2>Upload dump</h2>
     <p class="muted">Adds a link to the append-only dump chain (§11.4). Nothing is
     written until you confirm the diff below. Cancel writes nothing at all.</p>
@@ -122,6 +134,7 @@
   <span id="buildVer" class="hash"></span>
 </footer>
 <script src="uvl-parser.js"></script>
+<script src="uvl-gh.js"></script>
 <script>
 'use strict';
 // ---- environment -----------------------------------------------------------
@@ -231,6 +244,28 @@ S('btnCheckTok').onclick = async () => {
   S('tokStatus').className = r.ok ? 'ok' : 'err';
 };
 
+// ---- operator: init draw (v0.3) --------------------------------------------
+const DATA_ROOT = TEST ? 'uvl-test' : 'uvl';      // repo path root for data commits
+function needPat() { if (!PAT) throw new Error('paste and check a token first'); }
+S('btnInitDraw').onclick = async () => {
+  try {
+    needPat();
+    const id = S('newDrawId').value.trim();
+    const title = S('newDrawTitle').value.trim() || id;
+    if (!/^[a-z0-9][a-z0-9-]{2,60}$/.test(id)) throw new Error('id: lowercase letters, digits, dashes');
+    if (TEST && !id.startsWith('test-')) throw new Error('rehearsal draw ids must start with "test-" (§16.3)');
+    if (!TEST && id.startsWith('test-')) throw new Error('"test-" ids belong in /uvl-test/ (§16.3)');
+    if (state.draw) throw new Error('a draw is already active: ' + state.draw);
+    S('initStatus').textContent = 'committing…';
+    const meta = { id: id, title: title, summary: '', prize: '', links: {} };
+    const sha = await uvlGh.commitFiles(PAT, 'uvl(' + DATA_ROOT + '): init draw ' + id, [
+      { path: DATA_ROOT + '/draws/index.json', text: JSON.stringify({ active: id }, null, 2) },
+      { path: DATA_ROOT + '/draws/' + id + '/meta.json', text: JSON.stringify(meta, null, 2) }
+    ]);
+    S('initStatus').innerHTML = '<span class="ok">commit ' + sha.slice(0,7) + '</span> — reload after Pages rebuilds (~1 min)';
+  } catch (e) { S('initStatus').innerHTML = '<span class="err">' + e.message + '</span>'; }
+};
+
 // ---- operator: upload with diff (confirm-or-nothing, §11.4) ----------------
 S('dumpFile').onchange = async (ev) => {
   const f = ev.target.files[0]; if (!f) return;
@@ -240,7 +275,8 @@ S('dumpFile').onchange = async (ev) => {
   const now = res.tickets.map(t => t.url);
   const added = now.filter(u => !prev.includes(u));
   const gone  = prev.filter(u => !now.includes(u));
-  state.candidate = { name: f.name, html, tickets: res.tickets };
+  state.candidate = { name: f.name, html, tickets: res.tickets,
+                      entriesTotal: res.entriesTotal, fileMtime: f.lastModified };
   S('diffBox').hidden = false;
   S('diffBox').textContent = '';
   S('diffBox').innerHTML =
@@ -262,10 +298,41 @@ S('btnCancelUpload').onclick = () => {
   S('btnConfirmUpload').disabled = true; S('btnCancelUpload').disabled = true;
   S('upStatus').textContent = 'cancelled — nothing was written';
 };
-S('btnConfirmUpload').onclick = () => {
-  // v0.3: atomic multi-file commit via GitHub Git Data API (blob→tree→commit→ref):
-  // dumps/NNN-<utc>.html + updated chain.json in ONE commit, SHA reported back.
-  S('upStatus').textContent = 'GitHub commit lands in v0.3 — diff pipeline is live.';
+S('btnConfirmUpload').onclick = async () => {
+  try {
+    needPat();
+    const c = state.candidate;
+    if (!c) throw new Error('no candidate — choose a file');
+    if (!state.draw) throw new Error('no active draw — init one first');
+    if (state.seal) throw new Error('draw is SEALED — the chain is closed (§11.3)');
+    S('btnConfirmUpload').disabled = true;
+    S('upStatus').textContent = 'hashing…';
+    const buf = new TextEncoder().encode(c.html);
+    const hash = await uvlGh.sha256Hex(buf.buffer);
+    const n = ((state.chain && state.chain.links) || []).length + 1;
+    const ts = new Date().toISOString().replace(/[:]/g, '-').replace(/\..+/, 'Z');
+    const file = String(n).padStart(3, '0') + '-' + ts + '.html';
+    const capturedAt = new Date(c.fileMtime || Date.now()).toISOString();
+    const link = { n: n, file: 'dumps/' + file, capturedAt: capturedAt,
+                   uploadedAt: new Date().toISOString(), sha256: hash,
+                   entriesTotal: c.entriesTotal, tickets: c.tickets,
+                   parserVersion: uvlParser.VERSION };
+    const chain = { links: [ ...(state.chain && state.chain.links || []), link ] };
+    const base = DATA_ROOT + '/draws/' + state.draw + '/';
+    S('upStatus').textContent = 'committing (atomic)…';
+    const sha = await uvlGh.commitFiles(PAT,
+      'uvl(' + DATA_ROOT + '): ' + state.draw + ' chain link #' + n + ' (' + c.tickets.length + ' tickets)',
+      [ { path: base + 'dumps/' + file, buffer: buf.buffer },
+        { path: base + 'chain.json', text: JSON.stringify(chain, null, 2) } ]);
+    S('upStatus').innerHTML = '<span class="ok">chain link #' + n + ' committed: ' + sha.slice(0,7)
+      + '</span> · dump sha256 <span class="hash">' + hash.slice(0,12) + '…</span>';
+    state.chain = chain; state.candidate = null;
+    S('dumpFile').value = ''; S('btnCancelUpload').disabled = true;
+    renderOpen();                      // preview updates immediately from the new link
+  } catch (e) {
+    S('upStatus').innerHTML = '<span class="err">' + e.message + '</span>';
+    S('btnConfirmUpload').disabled = false;
+  }
 };
 
 boot().catch(e => { setPhase(null); S('secNoDraw').hidden = false; console.error(e); });
