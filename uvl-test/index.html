@@ -166,16 +166,33 @@ async function j(url) { // fetch JSON, null on 404 — absent files ARE states
 }
 
 // ---- boot ------------------------------------------------------------------
+// /uvl/            -> the active draw (draws/index.json)
+// /uvl/?draw=<id>  -> that specific draw, forever — the URL posts link to
+let VIEW_ONLY = false;                  // true when viewing a non-active draw
 async function boot() {
   S('buildVer').textContent = 'build ' + (await (await fetch('version.txt?t='+Date.now())).text()).trim();
   const index = await j('draws/index.json');
-  if (!index || !index.active) { setPhase(null); S('secNoDraw').hidden = false; return; }
   state.index = index;
-  state.draw = index.active;
+  const wanted = new URLSearchParams(location.search).get('draw');
+  const target = wanted || (index && index.active);
+  if (!target) { setPhase(null); S('secNoDraw').hidden = false; return; }
+  state.draw = target;
+  VIEW_ONLY = !!(wanted && (!index || wanted !== index.active));
   const base = 'draws/' + state.draw + '/';
   [state.meta, state.chain, state.seal, state.result] = await Promise.all(
     [j(base+'meta.json'), j(base+'chain.json'), j(base+'seal.json'), j(base+'result.json')]);
+  if (!state.meta) { setPhase(null); S('secNoDraw').hidden = false;
+    S('secNoDraw').querySelector('p').textContent = 'No draw "' + state.draw + '" here.'; return; }
   render();
+  renderPastDraws();
+}
+function renderPastDraws() {
+  const arch = (state.index && state.index.archived) || [];
+  if (!arch.length) return;
+  const sec = document.createElement('section');
+  sec.innerHTML = '<h2>Past draws</h2>' + arch.map(id =>
+    '<div><a href="?draw=' + encodeURIComponent(id) + '">' + id + '</a></div>').join('');
+  document.querySelector('main').appendChild(sec);
 }
 
 function setPhase(p) {
@@ -323,11 +340,14 @@ S('btnCheckTok').onclick = async () => {
 // ---- operator: init draw (v0.3) --------------------------------------------
 const DATA_ROOT = TEST ? 'uvl-test' : 'uvl';      // repo path root for data commits
 function needPat() { if (!PAT) throw new Error('paste and check a token first'); }
+function needActiveView() {
+  if (VIEW_ONLY) throw new Error('viewing an archived draw — operator actions apply to the active one at ' + location.pathname);
+}
 S('newDrawId').oninput = S('newDrawTitle').oninput = () => { S('initStatus').textContent = ''; };
 S('btnInitDraw').onclick = async () => {
   const id = S('newDrawId').value.trim();
   try {
-    needPat();
+    needPat(); needActiveView();
     const title = S('newDrawTitle').value.trim() || id;
     if (!/^[a-z0-9][a-z0-9-]{2,60}$/.test(id)) throw new Error('"' + id + '" — id: lowercase letters, digits, dashes');
     if (TEST && !id.startsWith('test-')) throw new Error('"' + id + '" — rehearsal draw ids must start with "test-" (§16.3)');
@@ -390,7 +410,7 @@ S('btnCancelUpload').onclick = () => {
 };
 S('btnConfirmUpload').onclick = async () => {
   try {
-    needPat();
+    needPat(); needActiveView();
     const c = state.candidate;
     if (!c) throw new Error('no candidate — choose a file');
     if (!state.draw) throw new Error('no active draw — init one first');
@@ -430,7 +450,7 @@ S('gapMin').value = TEST ? '10' : String(48 * 60);          // §8: 48 h; rehear
 let preflight = null;
 S('btnPreflight').onclick = async () => {
   try {
-    needPat();
+    needPat(); needActiveView();
     if (!state.draw) throw new Error('no active draw');
     if (state.seal) throw new Error('already SEALED — seal is single-use (§11.3)');
     const links = (state.chain && state.chain.links) || [];
@@ -467,7 +487,7 @@ S('btnPreflight').onclick = async () => {
 };
 S('btnSeal').onclick = async () => {
   try {
-    needPat();
+    needPat(); needActiveView();
     if (!preflight) throw new Error('run preflight first');
     if (S('sealTypeId').value.trim() !== state.draw)
       throw new Error('typed id does not match "' + state.draw + '"');
