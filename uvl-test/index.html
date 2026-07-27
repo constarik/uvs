@@ -155,7 +155,7 @@ const ORGANIZER = 'linkedin.com/in/constantinerazinsky';
 const S = id => document.getElementById(id);
 if (TEST) { S('testBanner').hidden = false; document.title = 'UVS Lottery — TEST'; }
 
-const state = { draw:null, meta:null, chain:null, seal:null, result:null,
+const state = { index:null, draw:null, meta:null, chain:null, seal:null, result:null,
                 candidate:null /* pending upload {name, html, tickets} */ };
 
 async function j(url) { // fetch JSON, null on 404 — absent files ARE states
@@ -170,6 +170,7 @@ async function boot() {
   S('buildVer').textContent = 'build ' + (await (await fetch('version.txt?t='+Date.now())).text()).trim();
   const index = await j('draws/index.json');
   if (!index || !index.active) { setPhase(null); S('secNoDraw').hidden = false; return; }
+  state.index = index;
   state.draw = index.active;
   const base = 'draws/' + state.draw + '/';
   [state.meta, state.chain, state.seal, state.result] = await Promise.all(
@@ -331,15 +332,26 @@ S('btnInitDraw').onclick = async () => {
     if (!/^[a-z0-9][a-z0-9-]{2,60}$/.test(id)) throw new Error('"' + id + '" — id: lowercase letters, digits, dashes');
     if (TEST && !id.startsWith('test-')) throw new Error('"' + id + '" — rehearsal draw ids must start with "test-" (§16.3)');
     if (!TEST && id.startsWith('test-')) throw new Error('"' + id + '" — "test-" ids belong in /uvl-test/ (§16.3)');
-    if (state.draw) throw new Error('a draw is already active: ' + state.draw);
+    if (state.draw) {                                   // one ACTIVE draw at a time
+      const s = state.seal;
+      const finished = s && Date.now() > Date.parse(s.targetRoundTimeUtc);
+      if (!finished) throw new Error('draw "' + state.draw + '" is still live ('
+        + (s ? 'sealed, round pending' : 'OPEN') + ') — it must reach its round first');
+    }
     S('initStatus').textContent = 'committing…';
     const meta = { id: id, title: title, summary: '', prize: '', links: {} };
-    const sha = await uvlGh.commitFiles(PAT, 'uvl(' + DATA_ROOT + '): init draw ' + id, [
-      { path: DATA_ROOT + '/draws/index.json', text: JSON.stringify({ active: id }, null, 2) },
-      { path: DATA_ROOT + '/draws/' + id + '/meta.json', text: JSON.stringify(meta, null, 2) }
+    const prevArchive = (state.index && state.index.archived) || [];
+    const idx = { active: id,
+                  archived: state.draw ? [...prevArchive, state.draw] : prevArchive };
+    const sha = await uvlGh.commitFiles(PAT, 'uvl(' + DATA_ROOT + '): init draw ' + id
+        + (state.draw ? ' (archive ' + state.draw + ')' : ''), [
+      { path: DATA_ROOT + '/draws/' + id + '/meta.json', text: JSON.stringify(meta, null, 2) },
+      { path: DATA_ROOT + '/draws/index.json', text: JSON.stringify(idx, null, 2) }
     ]);
     S('initStatus').innerHTML = '<span class="ok">commit ' + sha.slice(0,7) + '</span> — draw is active; you can upload a dump right away';
-    state.draw = id; state.meta = meta; state.chain = null;   // live without reload (v0.3.4)
+    state.index = idx;
+    state.draw = id; state.meta = meta; state.chain = null; state.seal = null; state.result = null;
+    S('secSealed').hidden = true; S('secRevealed').hidden = true;
     render();
   } catch (e) { S('initStatus').innerHTML = '<span class="err">' + e.message + '</span>'; }
 };
