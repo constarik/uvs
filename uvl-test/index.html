@@ -1,0 +1,274 @@
+<!doctype html>
+<!-- uvl index.html v0.2 — UVS Lottery draw page + operator console.
+     Self-contained by spec §15.2: no CDN, no external CSS/fonts, no analytics.
+     Network calls are protocol only: ./draws/*.json (same origin), GitHub API
+     (operator actions), drand (round check). Test mode = /uvl-test/ in path. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UVS Lottery</title>
+<style>
+  :root { --ink:#1c1c1c; --paper:#faf8f4; --line:#d8d2c6; --mono:ui-monospace,Consolas,monospace;
+          --open:#1a6fb0; --sealed:#a3232b; --revealed:#1c7a3d; --test:#8a6d00; }
+  * { box-sizing:border-box; }
+  body { margin:0; font:16px/1.5 system-ui,Segoe UI,Roboto,sans-serif; color:var(--ink); background:var(--paper); }
+  main { max-width:680px; margin:0 auto; padding:0 16px 48px; }
+  #testBanner { background:repeating-linear-gradient(45deg,#ffe9a8,#ffe9a8 12px,#fff3cd 12px,#fff3cd 24px);
+    color:var(--test); font-weight:700; text-align:center; padding:8px; letter-spacing:.5px; }
+  header { text-align:center; padding:28px 0 8px; }
+  #phaseStamp { display:inline-block; border:3px solid; border-radius:8px; padding:4px 18px;
+    font-weight:800; font-size:22px; letter-spacing:3px; text-transform:uppercase; transform:rotate(-2deg); }
+  .phase-OPEN #phaseStamp { color:var(--open); border-color:var(--open); }
+  .phase-SEALED #phaseStamp { color:var(--sealed); border-color:var(--sealed); }
+  .phase-REVEALED #phaseStamp { color:var(--revealed); border-color:var(--revealed); }
+  h1 { font-size:26px; margin:14px 0 4px; }
+  .summary { color:#555; margin:0 auto 10px; max-width:56ch; }
+  section { background:#fff; border:1px solid var(--line); border-radius:10px; padding:16px; margin:14px 0; }
+  section h2 { margin:0 0 10px; font-size:17px; }
+  .hash { font-family:var(--mono); font-size:13px; background:#f3f0ea; padding:2px 6px; border-radius:4px; }
+  .muted { color:#777; font-size:14px; }
+  .stale { color:var(--sealed); font-weight:600; }
+  #tickets { display:grid; grid-template-columns:repeat(auto-fill,minmax(230px,1fr)); gap:6px; margin-top:8px; }
+  .tk { font-family:var(--mono); font-size:12.5px; padding:6px 8px; background:#f7f5f0; border-radius:6px;
+        overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .tk b { color:var(--open); }
+  #countdown { font-family:var(--mono); font-size:34px; text-align:center; letter-spacing:2px; margin:8px 0; }
+  .seal-wax { text-align:center; font-size:40px; }
+  button { font:inherit; padding:8px 14px; border-radius:8px; border:1px solid var(--line);
+           background:#fff; cursor:pointer; }
+  button.primary { background:var(--open); border-color:var(--open); color:#fff; }
+  button.danger { background:var(--sealed); border-color:var(--sealed); color:#fff; }
+  button:disabled { opacity:.45; cursor:not-allowed; }
+  input[type=password], input[type=text] { font:inherit; width:100%; padding:8px; border:1px solid var(--line); border-radius:8px; }
+  #diffBox { font-family:var(--mono); font-size:13px; white-space:pre-wrap; background:#f7f5f0;
+             border-radius:8px; padding:10px; max-height:260px; overflow:auto; }
+  .diff-add { color:var(--revealed); } .diff-del { color:var(--sealed); }
+  details > summary { cursor:pointer; font-weight:600; }
+  footer { text-align:center; color:#999; font-size:13px; padding:24px 0; }
+  footer a { color:inherit; }
+  .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin:8px 0; }
+  .ok { color:var(--revealed); } .err { color:var(--sealed); }
+</style>
+</head>
+<body>
+<div id="testBanner" hidden>REHEARSAL AREA — test draws only, nothing here is real</div>
+<header>
+  <div id="phaseStamp">…</div>
+  <h1 id="title">UVS Lottery</h1>
+  <p class="summary" id="summary"></p>
+</header>
+<main>
+  <section id="secNoDraw" hidden><h2>No active draw</h2>
+    <p class="muted">Nothing is running right now. Draws appear here when announced.</p></section>
+  <section id="secMeta" hidden>
+    <h2>This draw</h2>
+    <div id="metaPrize"></div>
+    <div class="muted" id="metaLinks"></div>
+  </section>
+  <section id="secPreview" hidden>
+    <h2>Entries so far <span class="muted">(preview, non-binding)</span></h2>
+    <div id="previewAge" class="muted"></div>
+    <div id="tickets"></div>
+    <p class="muted">A missing entry here means nothing — only the list captured at
+    cutoff counts. Entries can also disappear if a comment is deleted before cutoff.</p>
+  </section>
+  <section id="secSealed" hidden>
+    <div class="seal-wax">🔴</div>
+    <h2 style="text-align:center">List sealed — outcome not yet knowable</h2>
+    <div id="countdown">--:--:--</div>
+    <div class="muted" style="text-align:center">until target drand round <span id="roundNo" class="hash"></span></div>
+    <div id="sealHashes" style="margin-top:10px"></div>
+  </section>
+  <section id="secRevealed" hidden>
+    <h2>Result</h2>
+    <div id="winnerBox"></div>
+    <p class="muted">Recomputed in your browser from the sealed files and the drand round.</p>
+  </section>
+</main>
+<section id="secOperator" style="max-width:680px;margin:14px auto;">
+  <details>
+    <summary>Operator console</summary>
+    <p class="muted">Visible to everyone, usable only with a write token —
+    authorization is GitHub's job, not this page's. The token lives in tab
+    memory only; closing the tab is logging out.</p>
+    <div class="row">
+      <input type="password" id="patInput" placeholder="fine-grained PAT (contents:write on constarik/uvs)">
+    </div>
+    <div class="row">
+      <button id="btnCheckTok">check token</button><span id="tokStatus" class="muted"></span>
+    </div>
+    <hr style="border:none;border-top:1px solid var(--line)">
+    <h2>Upload dump</h2>
+    <p class="muted">Adds a link to the append-only dump chain (§11.4). Nothing is
+    written until you confirm the diff below. Cancel writes nothing at all.</p>
+    <div class="row"><input type="file" id="dumpFile" accept=".html,.htm"></div>
+    <div id="diffBox" hidden></div>
+    <div class="row">
+      <button id="btnConfirmUpload" class="primary" disabled>confirm — add chain link</button>
+      <button id="btnCancelUpload" disabled>cancel</button>
+      <span id="upStatus" class="muted"></span>
+    </div>
+    <hr style="border:none;border-top:1px solid var(--line)">
+    <h2>Seal</h2>
+    <p class="muted">Freezes the current chain link, computes the target round from
+    drand /info, snapshots the parser into the draw folder. Single-use; guarded by
+    a preflight summary. Not implemented in v0.2 — next build.</p>
+    <div class="row"><button id="btnSeal" class="danger" disabled>seal (v0.3)</button></div>
+  </details>
+</section>
+<footer>
+  <a href="https://uncloned.work">Uncloned Math</a> · uvLs ·
+  <span id="buildVer" class="hash"></span>
+</footer>
+<script src="uvl-parser.js"></script>
+<script>
+'use strict';
+// ---- environment -----------------------------------------------------------
+const TEST = location.pathname.includes('/uvl-test/');
+const ORGANIZER = 'linkedin.com/in/constantinerazinsky';
+const S = id => document.getElementById(id);
+if (TEST) { S('testBanner').hidden = false; document.title = 'UVS Lottery — TEST'; }
+
+const state = { draw:null, meta:null, chain:null, seal:null, result:null,
+                candidate:null /* pending upload {name, html, tickets} */ };
+
+async function j(url) { // fetch JSON, null on 404 — absent files ARE states
+  const r = await fetch(url + '?t=' + Date.now());
+  if (r.status === 404) return null;
+  if (!r.ok) throw new Error(url + ' -> ' + r.status);
+  return r.json();
+}
+
+// ---- boot ------------------------------------------------------------------
+async function boot() {
+  S('buildVer').textContent = 'build ' + (await (await fetch('version.txt?t='+Date.now())).text()).trim();
+  const index = await j('draws/index.json');
+  if (!index || !index.active) { setPhase(null); S('secNoDraw').hidden = false; return; }
+  state.draw = index.active;
+  const base = 'draws/' + state.draw + '/';
+  [state.meta, state.chain, state.seal, state.result] = await Promise.all(
+    [j(base+'meta.json'), j(base+'chain.json'), j(base+'seal.json'), j(base+'result.json')]);
+  render();
+}
+
+function setPhase(p) {
+  document.body.className = p ? 'phase-' + p : '';
+  S('phaseStamp').textContent = p || 'idle';
+}
+
+function render() {
+  const m = state.meta || {};
+  S('title').textContent = m.title || 'UVS Lottery';
+  S('summary').textContent = m.summary || '';
+  S('secMeta').hidden = false;
+  S('metaPrize').textContent = m.prize ? ('Prize: ' + m.prize) : '';
+  S('metaLinks').innerHTML = m.links && m.links.post
+    ? 'Enter by commenting on <a href="'+m.links.post+'">the LinkedIn post</a>.' : '';
+  if (state.seal) renderSealed(); else renderOpen();
+}
+
+// ---- OPEN ------------------------------------------------------------------
+function fmtAge(iso) {
+  const h = (Date.now() - Date.parse(iso)) / 3600000;
+  if (h < 1) return 'captured ' + Math.max(1, Math.round(h*60)) + ' min ago';
+  if (h < 48) return 'captured ' + Math.round(h) + ' h ago';
+  return 'captured ' + Math.round(h/24) + ' days ago';
+}
+function renderOpen() {
+  setPhase('OPEN');
+  const c = state.chain;
+  if (!c || !c.links || !c.links.length) {
+    S('secPreview').hidden = false;
+    S('previewAge').textContent = 'No dump captured yet — the preview appears after the first capture.';
+    return;
+  }
+  const cur = c.links[c.links.length - 1];       // newest link is current (§11.4)
+  const stale = (Date.now() - Date.parse(cur.capturedAt)) > 24*3600000;
+  S('secPreview').hidden = false;
+  S('previewAge').innerHTML = fmtAge(cur.capturedAt)
+    + ' · <span class="hash">' + cur.sha256.slice(0,12) + '…</span>'
+    + (stale ? ' · <span class="stale">stale — a fresher capture is overdue</span>' : '');
+  S('tickets').innerHTML = (cur.tickets || [])
+    .map(t => '<div class="tk"><b>' + t.ticket + '</b> ' + t.url + '</div>').join('');
+}
+
+// ---- SEALED ----------------------------------------------------------------
+function renderSealed() {
+  setPhase('SEALED');
+  S('secPreview').hidden = true;
+  S('secSealed').hidden = false;
+  const s = state.seal;
+  S('roundNo').textContent = '#' + s.targetRound;
+  S('sealHashes').innerHTML =
+    hashRow('ticket list', s.ticketListSha256) + hashRow('dump', s.dumpSha256) +
+    hashRow('parser', s.parserSha256) + (s.prizeSha256 ? hashRow('prize', s.prizeSha256) : '');
+  const target = Date.parse(s.targetRoundTimeUtc);
+  const tick = () => {
+    const d = target - Date.now();
+    if (d <= 0) { S('countdown').textContent = 'round due — checking…'; return; }
+    const h = Math.floor(d/3600000), m = Math.floor(d/60000)%60, sec = Math.floor(d/1000)%60;
+    S('countdown').textContent = String(h).padStart(2,'0')+':'+String(m).padStart(2,'0')+':'+String(sec).padStart(2,'0');
+    setTimeout(tick, 1000);
+  };
+  tick();
+  // REVEALED transition (drand check + winner derivation) lands in v0.3 with the SDK bundle.
+}
+function hashRow(label, h) {
+  return '<div class="row"><span class="muted" style="min-width:90px">'+label+'</span>'
+       + '<span class="hash">'+(h||'').slice(0,16)+'…</span>'
+       + '<button onclick="navigator.clipboard.writeText(\''+h+'\')">copy</button></div>';
+}
+
+// ---- operator: token -------------------------------------------------------
+let PAT = null;                                   // tab memory only (§11.1)
+const REPO_API = 'https://api.github.com/repos/constarik/uvs';
+S('btnCheckTok').onclick = async () => {
+  PAT = S('patInput').value.trim() || null;
+  if (!PAT) { S('tokStatus').textContent = 'no token'; return; }
+  const r = await fetch(REPO_API, { headers: { Authorization: 'Bearer ' + PAT } });
+  S('tokStatus').textContent = r.ok ? 'token OK (repo visible)' : 'rejected: HTTP ' + r.status;
+  S('tokStatus').className = r.ok ? 'ok' : 'err';
+};
+
+// ---- operator: upload with diff (confirm-or-nothing, §11.4) ----------------
+S('dumpFile').onchange = async (ev) => {
+  const f = ev.target.files[0]; if (!f) return;
+  const html = await f.text();
+  const res = uvlParser.buildTickets(html, { exclude: [ORGANIZER] });
+  const prev = currentTickets().map(t => t.url);
+  const now = res.tickets.map(t => t.url);
+  const added = now.filter(u => !prev.includes(u));
+  const gone  = prev.filter(u => !now.includes(u));
+  state.candidate = { name: f.name, html, tickets: res.tickets };
+  S('diffBox').hidden = false;
+  S('diffBox').textContent = '';
+  S('diffBox').innerHTML =
+    'entities: ' + res.entriesTotal + ' → tickets: ' + res.tickets.length + '\n'
+    + (added.length ? added.map(u => '<span class="diff-add">+ ' + u + '</span>').join('\n') + '\n' : '')
+    + (gone.length  ? gone.map(u => '<span class="diff-del">− ' + u + ' (comment deleted?)</span>').join('\n') + '\n' : '')
+    + (!added.length && !gone.length ? '(no changes vs current preview)' : '');
+  S('btnConfirmUpload').disabled = !PAT;
+  S('btnCancelUpload').disabled = false;
+  S('upStatus').textContent = PAT ? 'review the diff, then confirm' : 'paste a token to enable confirm';
+};
+function currentTickets() {
+  const c = state.chain;
+  return (c && c.links && c.links.length) ? (c.links[c.links.length-1].tickets || []) : [];
+}
+S('btnCancelUpload').onclick = () => {
+  state.candidate = null; S('dumpFile').value = '';
+  S('diffBox').hidden = true;
+  S('btnConfirmUpload').disabled = true; S('btnCancelUpload').disabled = true;
+  S('upStatus').textContent = 'cancelled — nothing was written';
+};
+S('btnConfirmUpload').onclick = () => {
+  // v0.3: atomic multi-file commit via GitHub Git Data API (blob→tree→commit→ref):
+  // dumps/NNN-<utc>.html + updated chain.json in ONE commit, SHA reported back.
+  S('upStatus').textContent = 'GitHub commit lands in v0.3 — diff pipeline is live.';
+};
+
+boot().catch(e => { setPhase(null); S('secNoDraw').hidden = false; console.error(e); });
+</script>
+</body>
+</html>
