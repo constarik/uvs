@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- uvl index.html v0.3 — UVS Lottery draw page + operator console.
+<!-- uvl index.html v0.4 — UVS Lottery draw page + operator console.
      Self-contained by spec §15.2: no CDN, no external CSS/fonts, no analytics.
      Network calls are protocol only: ./draws/*.json (same origin), GitHub API
      (operator actions), drand (round check). Test mode = /uvl-test/ in path. -->
@@ -123,10 +123,21 @@
     </div>
     <hr style="border:none;border-top:1px solid var(--line)">
     <h2>Seal</h2>
-    <p class="muted">Freezes the current chain link, computes the target round from
-    drand /info, snapshots the parser into the draw folder. Single-use; guarded by
-    a preflight summary. Not implemented in v0.2 — next build.</p>
-    <div class="row"><button id="btnSeal" class="danger" disabled>seal (v0.3)</button></div>
+    <p class="muted">Freezes the current chain link, fixes the target drand round,
+    snapshots the parser into the draw folder. Single-use, append-only.</p>
+    <div class="row">
+      <label class="muted">gap, minutes:</label>
+      <input type="text" id="gapMin" style="width:90px">
+      <label class="muted">prize link SHA-256 (optional):</label>
+    </div>
+    <div class="row"><input type="text" id="prizeSha" placeholder="empty for rehearsal draws"></div>
+    <div class="row"><button id="btnPreflight">preflight</button></div>
+    <div id="preflightBox" hidden style="background:#f7f5f0;border-radius:8px;padding:10px"></div>
+    <div class="row" id="sealConfirmRow" hidden>
+      <input type="text" id="sealTypeId" placeholder="type the draw id to confirm" style="flex:1">
+      <button id="btnSeal" class="danger">SEAL</button>
+    </div>
+    <div class="row"><span id="sealStatus" class="muted"></span></div>
   </details>
 </section>
 <footer>
@@ -135,6 +146,7 @@
 </footer>
 <script src="uvl-parser.js"></script>
 <script src="uvl-gh.js"></script>
+<script src="uvl-draw.js"></script>
 <script>
 'use strict';
 // ---- environment -----------------------------------------------------------
@@ -225,12 +237,60 @@ function renderSealed() {
     setTimeout(tick, 1000);
   };
   tick();
-  // REVEALED transition (drand check + winner derivation) lands in v0.3 with the SDK bundle.
+  maybeReveal();                        // REVEALED is not switched on by anyone (§9)
 }
 function hashRow(label, h) {
   return '<div class="row"><span class="muted" style="min-width:90px">'+label+'</span>'
        + '<span class="hash">'+(h||'').slice(0,16)+'…</span>'
        + '<button onclick="navigator.clipboard.writeText(\''+h+'\')">copy</button></div>';
+}
+
+// ---- REVEALED: derived client-side, simultaneously for every visitor (§9) --
+let revealPolling = false;
+async function maybeReveal() {
+  const s = state.seal; if (!s) return;
+  if (Date.now() < Date.parse(s.targetRoundTimeUtc) - 5000) {
+    setTimeout(maybeReveal, Math.min(60000,
+      Date.parse(s.targetRoundTimeUtc) - Date.now() - 4000)); return;
+  }
+  if (revealPolling) return; revealPolling = true;
+  const poll = async () => {
+    try {
+      const round = await uvlDraw.fetchDeciding(s.targetRound);   // §7.1 fallback inside
+      if (!round) { setTimeout(poll, 5000); return; }
+      await renderRevealed(round);
+    } catch (e) { console.error(e); setTimeout(poll, 15000); }
+  };
+  poll();
+}
+async function renderRevealed(round) {
+  setPhase('REVEALED');
+  S('secSealed').hidden = true; S('secRevealed').hidden = false;
+  const s = state.seal;
+  const ids = s.tickets.map(t => t.url);
+  const combined = await uvlDraw.combinedSeed(s.serverSeed, round.randomness);
+  const order = await uvlDraw.permute(ids, combined);
+  const byUrl = {}; s.tickets.forEach(t => byUrl[t.url] = t.ticket);
+  const win = order[0], succ = order[1];
+  S('winnerBox').innerHTML =
+    '<div style="font-size:20px;margin:6px 0"><b>' + byUrl[win.id] + '</b> — ' + win.id + '</div>'
+    + '<div class="muted">round ' + round.round
+    + (round.round !== s.targetRound ? ' (fallback: first available ≥ ' + s.targetRound + ', §7.1)' : '')
+    + ' · randomness <span class="hash">' + round.randomness.slice(0,16) + '…</span></div>'
+    + '<div class="muted">combinedSeed <span class="hash">' + combined.slice(0,16) + '…</span>'
+    + ' · score <span class="hash">' + win.score.slice(0,16) + '…</span></div>'
+    + (succ ? '<div class="muted" style="margin-top:6px">successor if unclaimed (72 h): '
+      + byUrl[succ.id] + ' — ' + succ.id + '</div>' : '')
+    + '<div class="row" style="margin-top:10px"><input type="text" id="lookupUrl" '
+    + 'placeholder="your linkedin.com/in/… — check your ticket" style="flex:1">'
+    + '<button id="btnLookup">check</button></div><div id="lookupOut" class="muted"></div>';
+  S('btnLookup').onclick = async () => {
+    const u = uvlParser.normalizeUrl(S('lookupUrl').value.trim());
+    if (!u) { S('lookupOut').textContent = 'not a valid profile URL'; return; }
+    const rank = order.findIndex(o => o.id === u);
+    S('lookupOut').textContent = rank === -1 ? 'not in this draw'
+      : (byUrl[u] + ' — rank ' + (rank + 1) + ' of ' + order.length);
+  };
 }
 
 // ---- operator: token -------------------------------------------------------
@@ -340,6 +400,84 @@ S('btnConfirmUpload').onclick = async () => {
     S('upStatus').innerHTML = '<span class="err">' + e.message + '</span>';
     S('btnConfirmUpload').disabled = false;
   }
+};
+
+// ---- operator: seal (v0.4) -------------------------------------------------
+S('gapMin').value = TEST ? '10' : String(48 * 60);          // §8: 48 h; rehearsal ~10 min
+let preflight = null;
+S('btnPreflight').onclick = async () => {
+  try {
+    needPat();
+    if (!state.draw) throw new Error('no active draw');
+    if (state.seal) throw new Error('already SEALED — seal is single-use (§11.3)');
+    const links = (state.chain && state.chain.links) || [];
+    if (!links.length) throw new Error('no chain link — upload a dump first');
+    const cur = links[links.length - 1];
+    S('sealStatus').textContent = 'checking repo state + drand…';
+    // single-use guard against the REPOSITORY, not page memory (§11.3)
+    const probe = await fetch(REPO_API + '/contents/' + DATA_ROOT + '/draws/' + state.draw + '/seal.json',
+      { headers: { Authorization: 'Bearer ' + PAT, Accept: 'application/vnd.github+json' } });
+    if (probe.ok) throw new Error('seal.json already exists in the repository — refusing');
+    const info = await uvlDraw.fetchInfo();                  // live period/genesis (§8)
+    const period = info.period, genesis = info.genesis_time;
+    const gapSec = Math.round(parseFloat(S('gapMin').value) * 60);
+    if (!(gapSec > 0)) throw new Error('gap must be positive');
+    const nowSec = Math.floor(Date.now() / 1000);
+    const targetRound = Math.floor((nowSec + gapSec - genesis) / period) + 2;
+    const targetTime = new Date((genesis + (targetRound - 1) * period) * 1000).toISOString();
+    preflight = { cur, targetRound, targetTime, period, genesis,
+                  prizeSha: S('prizeSha').value.trim() || null };
+    S('preflightBox').hidden = false;
+    S('preflightBox').innerHTML =
+      '<b>Preflight — read every line (§11.3)</b><br>'
+      + 'draw: <span class="hash">' + state.draw + '</span> (root ' + DATA_ROOT + ')<br>'
+      + 'chain link #' + cur.n + ' · ' + cur.tickets.length + ' tickets · dump <span class="hash">'
+      + cur.sha256.slice(0,16) + '…</span><br>'
+      + 'target round <b>#' + targetRound + '</b> expected <b>' + targetTime + '</b> (gap '
+      + (gapSec/60) + ' min)<br>'
+      + 'fallback: first available round ≥ target (§7.1)<br>'
+      + (preflight.prizeSha ? 'prize hash: <span class="hash">' + preflight.prizeSha.slice(0,16) + '…</span>'
+                            : 'no prize hash (rehearsal)');
+    S('sealConfirmRow').hidden = false;
+    S('sealStatus').textContent = 'type the draw id and press SEAL';
+  } catch (e) { S('sealStatus').innerHTML = '<span class="err">' + e.message + '</span>'; }
+};
+S('btnSeal').onclick = async () => {
+  try {
+    needPat();
+    if (!preflight) throw new Error('run preflight first');
+    if (S('sealTypeId').value.trim() !== state.draw)
+      throw new Error('typed id does not match "' + state.draw + '"');
+    S('sealStatus').textContent = 'sealing…';
+    const cur = preflight.cur;
+    const base = DATA_ROOT + '/draws/' + state.draw + '/';
+    const parserSrc = await (await fetch('uvl-parser.js?t=' + Date.now())).text();
+    const parserSha = await uvlGh.sha256Hex(new TextEncoder().encode(parserSrc).buffer);
+    const ticketsText = JSON.stringify({ draw: state.draw, chainLink: cur.n,
+      dumpSha256: cur.sha256, tickets: cur.tickets }, null, 2);
+    const ticketsSha = await uvlGh.sha256Hex(new TextEncoder().encode(ticketsText).buffer);
+    const seal = { id: state.draw, serverSeed: state.draw,
+      sealedAt: new Date().toISOString(), chainLink: cur.n, dumpFile: cur.file,
+      dumpSha256: cur.sha256, ticketListFile: 'tickets.json', ticketListSha256: ticketsSha,
+      parserSnapshotFile: 'uvl-parser-snapshot.js', parserSha256: parserSha,
+      parserVersion: uvlParser.VERSION, prizeSha256: preflight.prizeSha,
+      drand: { beacon: 'quicknet', chainHash: uvlDraw.QUICKNET.chainHash,
+               period: preflight.period, genesisTime: preflight.genesis },
+      targetRound: preflight.targetRound, targetRoundTimeUtc: preflight.targetTime,
+      fallbackRule: 'the outcome is decided by the first available round with number >= target (§7.1)',
+      tickets: cur.tickets };
+    // pointer (seal.json) LAST — matters on the sequential fallback path
+    const sha = await uvlGh.commitFiles(PAT,
+      'uvl(' + DATA_ROOT + '): SEAL ' + state.draw + ' — ' + cur.tickets.length
+      + ' tickets, target round ' + preflight.targetRound,
+      [ { path: base + 'tickets.json', text: ticketsText },
+        { path: base + 'uvl-parser-snapshot.js', text: parserSrc },
+        { path: base + 'seal.json', text: JSON.stringify(seal, null, 2) } ]);
+    S('sealStatus').innerHTML = '<span class="ok">SEALED — commit ' + String(sha).slice(0,7) + '</span>';
+    state.seal = seal; preflight = null;
+    S('sealConfirmRow').hidden = true; S('preflightBox').hidden = true;
+    render();
+  } catch (e) { S('sealStatus').innerHTML = '<span class="err">' + e.message + '</span>'; }
 };
 
 boot().catch(e => { setPhase(null); S('secNoDraw').hidden = false; console.error(e); });
