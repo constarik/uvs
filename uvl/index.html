@@ -221,9 +221,13 @@ function renderOpen() {
 // ---- SEALED ----------------------------------------------------------------
 function renderSealed() {
   setPhase('SEALED');
-  S('secPreview').hidden = true;
-  S('secSealed').hidden = false;
+  S('secPreview').hidden = false;                    // §9: SEALED shows the ticket list
   const s = state.seal;
+  S('previewAge').innerHTML = '<b>Sealed ticket list</b> — ' + s.tickets.length
+    + ' tickets, frozen at ' + s.sealedAt + '; chain link #' + s.chainLink;
+  S('tickets').innerHTML = s.tickets
+    .map(t => '<div class="tk"><b>' + t.ticket + '</b> ' + t.url + '</div>').join('');
+  S('secSealed').hidden = false;
   S('roundNo').textContent = '#' + s.targetRound;
   S('sealHashes').innerHTML =
     hashRow('ticket list', s.ticketListSha256) + hashRow('dump', s.dumpSha256) +
@@ -265,7 +269,8 @@ async function maybeReveal() {
 }
 async function renderRevealed(round) {
   setPhase('REVEALED');
-  S('secSealed').hidden = true; S('secRevealed').hidden = false;
+  S('secSealed').hidden = true; S('secPreview').hidden = true;
+  S('secRevealed').hidden = false;
   const s = state.seal;
   const ids = s.tickets.map(t => t.url);
   const combined = await uvlDraw.combinedSeed(s.serverSeed, round.randomness);
@@ -283,7 +288,13 @@ async function renderRevealed(round) {
       + byUrl[succ.id] + ' — ' + succ.id + '</div>' : '')
     + '<div class="row" style="margin-top:10px"><input type="text" id="lookupUrl" '
     + 'placeholder="your linkedin.com/in/… — check your ticket" style="flex:1">'
-    + '<button id="btnLookup">check</button></div><div id="lookupOut" class="muted"></div>';
+    + '<button id="btnLookup">check</button></div><div id="lookupOut" class="muted"></div>'
+    + '<details style="margin-top:12px"><summary>Full ordering — every ticket, rank by score ('
+    + order.length + ')</summary><div id="fullOrder" style="margin-top:8px">'
+    + order.map((o, i) => '<div class="tk">#' + String(i + 1).padStart(3, '0')
+      + ' <b>' + byUrl[o.id] + '</b> ' + o.id
+      + ' <span class="muted">' + o.score.slice(0, 10) + '…</span></div>').join('')
+    + '</div></details>';
   S('btnLookup').onclick = async () => {
     const u = uvlParser.normalizeUrl(S('lookupUrl').value.trim());
     if (!u) { S('lookupOut').textContent = 'not a valid profile URL'; return; }
