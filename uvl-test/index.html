@@ -185,6 +185,11 @@ async function boot() {
     S('secNoDraw').querySelector('p').textContent = 'No draw "' + state.draw + '" here.'; return; }
   render();
   renderPastDraws();
+  if (VIEW_ONLY) {                        // archived view: no dead operator controls
+    S('secOperator').innerHTML =
+      '<p class="muted">Archived draw — read-only. The operator console lives on the '
+      + '<a href="' + location.pathname + '">active draw page</a>.</p>';
+  }
 }
 function renderPastDraws() {
   const arch = (state.index && state.index.archived) || [];
