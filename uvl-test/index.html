@@ -117,7 +117,7 @@
       <span id="initStatus" class="muted"></span>
     </div>
     <hr style="border:none;border-top:1px solid var(--line)">
-    <h2>Upload dump</h2>
+    <h2 id="hUpload">Upload dump</h2>
     <p class="muted">Adds a link to the append-only dump chain (§11.4). Nothing is
     written until you confirm the diff below. Cancel writes nothing at all.</p>
     <div class="row"><input type="file" id="dumpFile" accept=".html,.htm"></div>
@@ -128,7 +128,7 @@
       <span id="upStatus" class="muted"></span>
     </div>
     <hr style="border:none;border-top:1px solid var(--line)">
-    <h2>Seal</h2>
+    <h2 id="hSeal">Seal</h2>
     <p class="muted">Freezes the current chain link, fixes the target drand round,
     snapshots the parser into the draw folder. Single-use, append-only.</p>
     <div class="row">
@@ -240,6 +240,9 @@ function render() {
   const m = state.meta || {};
   S('title').textContent = m.title || 'UVS Lottery';
   S('summary').textContent = m.summary || '';
+  // console sections name the draw they operate on — nothing is anonymous
+  S('hUpload').textContent = 'Upload dump — ' + state.draw;
+  S('hSeal').textContent = 'Seal — ' + state.draw;
   S('secMeta').hidden = false;
   S('metaPrize').textContent = m.prize ? ('Prize: ' + m.prize) : '';
   S('metaLinks').innerHTML = m.links && m.links.post
@@ -401,6 +404,15 @@ function needDrawPage() {
 }
 S('newDrawId').oninput = S('newDrawTitle').oninput = () => { S('initStatus').textContent = ''; };
 S('btnInitDraw').onclick = async () => {
+  if (S('btnInitDraw').dataset.created) {              // "new draw…" resets the frozen form
+    delete S('btnInitDraw').dataset.created;
+    S('btnInitDraw').textContent = 'init draw';
+    S('newDrawId').disabled = S('newDrawTitle').disabled = false;
+    S('newDrawId').value = S('newDrawTitle').value = '';
+    S('initStatus').textContent = '';
+    S('newDrawTitle').focus();
+    return;
+  }
   const id = S('newDrawId').value.trim();
   try {
     needPat();
@@ -448,9 +460,13 @@ S('btnInitDraw').onclick = async () => {
       { path: DATA_ROOT + '/draws/' + id + '/meta.json', text: JSON.stringify(meta, null, 2) },
       { path: DATA_ROOT + '/draws/index.json', text: JSON.stringify(idx, null, 2) }
     ]);
-    S('initStatus').innerHTML = '<span class="ok">commit ' + sha.slice(0,7)
-      + '</span> — draw created; <a href="?draw=' + encodeURIComponent(id) + '">open its page</a> to upload a dump';
+    S('initStatus').innerHTML = '<span class="ok">created "' + id + '"</span> — commit '
+      + sha.slice(0,7) + ' · <a href="?draw=' + encodeURIComponent(id) + '">open its page</a> to upload a dump';
     state.index = idx;
+    // created name is a fact, not a draft: freeze the form (v0.4.10)
+    S('newDrawId').disabled = S('newDrawTitle').disabled = true;
+    S('btnInitDraw').textContent = 'new draw…';
+    S('btnInitDraw').dataset.created = '1';
   } catch (e) { S('initStatus').innerHTML = '<span class="err">' + e.message + '</span>'; }
 };
 
