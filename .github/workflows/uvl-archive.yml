@@ -1,0 +1,38 @@
+# uvl archival job (spec §12): when a sealed draw's target drand round exists,
+# derive the winner and commit result.json beside the sealed artifacts.
+# No secrets beyond the default GITHUB_TOKEN; idempotent; append-only.
+name: uvl-archive
+on:
+  schedule:
+    - cron: '*/30 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: uvl-archive
+  cancel-in-progress: false
+
+jobs:
+  archive:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: derive due results
+        run: node scripts/uvl-archive.cjs
+      - name: commit result files (if any)
+        run: |
+          git add -A uvl/draws uvl-test/draws 2>/dev/null || true
+          if git diff --cached --quiet; then
+            echo "nothing to archive"
+          else
+            git config user.name 'uvl-archive[bot]'
+            git config user.email 'uvl-archive@users.noreply.github.com'
+            git commit -m 'uvl-archive: result.json (spec §12)'
+            git pull --rebase origin master
+            git push
+          fi

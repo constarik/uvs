@@ -1,0 +1,16 @@
+{
+  "draw": "test-draw-one",
+  "archivedAt": "2026-07-28T07:35:44.537Z",
+  "round": 30785931,
+  "targetRound": 30785931,
+  "usedFallback": false,
+  "randomness": "dc998c33032013c2035b8cf9268fcc47e470472612cc072b09f4dfb86965b02a",
+  "signature": "b1c37f26139477c673ce023d4ee0931acff5a6ebb4c323b8e3465259e12f2a9bd42b128449622062de3b98cb0fa50e64",
+  "combinedSeed": "0cc955d55ad5f8290094f0debdfb66aa67e89c01dc745835e871bb6105558f15",
+  "winner": "linkedin.com/in/mohsin-product-designer",
+  "winnerTicket": "TICKET-0174",
+  "winnerScore": "fee01c6205e005984f5330c5fad43b8fb46d502879799bc6bb93eb11a1a00a65",
+  "successor": "linkedin.com/in/iva-naglic-dolic",
+  "successorTicket": "TICKET-0086",
+  "note": "archive only (spec §12) — the result is derivable by anyone from seal.json and the drand round"
+}
