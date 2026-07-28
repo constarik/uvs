@@ -1,3 +1,7 @@
 {
-  "active": "test-draw-one"
+  "active": "test-draw-one",
+  "archived": [
+    "test-draw-one",
+    "test-draw-one"
+  ]
 }
