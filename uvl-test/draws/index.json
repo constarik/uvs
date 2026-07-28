@@ -1,3 +1,7 @@
 {
-  "draws": ["test-draw-one", "test-draw-one-2"]
+  "draws": [
+    "test-draw-one",
+    "test-draw-one-2",
+    "test-scnd"
+  ]
 }
