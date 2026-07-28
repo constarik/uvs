@@ -1,0 +1,20 @@
+{
+  "id": "test-draw-one-2",
+  "title": "test-scnd",
+  "summary": "",
+  "prize": "",
+  "links": {},
+  "profile": {
+    "extract": {
+      "class": "linkedin-spa",
+      "extends": "uvl-collect-base",
+      "version": "0.3"
+    },
+    "tickets": {
+      "policy": "one-per-person"
+    },
+    "excludes": [
+      "linkedin.com/in/constantinerazinsky"
+    ]
+  }
+}
