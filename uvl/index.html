@@ -314,10 +314,13 @@ async function renderRevealed(round) {
       + ' <span class="muted">' + o.score.slice(0, 10) + '…</span></div>').join('')
     + '</div></details>';
   S('btnLookup').onclick = async () => {
-    const u = uvlParser.normalizeUrl(S('lookupUrl').value.trim());
-    if (!u) { S('lookupOut').textContent = 'not a valid profile URL'; return; }
+    const raw = S('lookupUrl').value.trim().replace(/^@/, '');
+    // accept a full profile URL or a bare slug ("mohsin-product-designer")
+    const u = uvlParser.normalizeUrl(raw)
+           || (/^[^\s\/]+$/.test(raw) ? uvlParser.normalizeUrl('linkedin.com/in/' + raw) : null);
+    if (!u) { S('lookupOut').textContent = 'not a valid profile URL or slug'; return; }
     const rank = order.findIndex(o => o.id === u);
-    S('lookupOut').textContent = rank === -1 ? 'not in this draw'
+    S('lookupOut').textContent = rank === -1 ? u + ' — not in this draw'
       : (byUrl[u] + ' — rank ' + (rank + 1) + ' of ' + order.length);
   };
 }
