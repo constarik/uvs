@@ -10,7 +10,12 @@
   else root.uvlParser = factory();
 })(typeof self !== 'undefined' ? self : this, function () {
   'use strict';
-  const VERSION = '0.2';
+  const VERSION = '0.3';
+  // v0.3: the parser declares itself as a collection class (draw profiles).
+  // Base class = source-independent uvLs semantics: document order -> normalize ->
+  // ticket policy -> numbering -> excludes. This module implements the extractor
+  // for the logged-in LinkedIn SPA post page (URN anchors).
+  const CLASS = { name: 'linkedin-spa', extends: 'uvl-collect-base', version: VERSION };
   const ANCHOR = 'id="replaceableComment_urn:li:comment:(';
 
   // §5 — canonical form `linkedin.com/in/<slug>` or null if not a person profile.
@@ -50,21 +55,30 @@
     return entries;
   }
 
-  // Full §6 pipeline. exclude: array of canonical URLs (the organizer, spec §1).
+  // Full base-class pipeline. opts: { exclude: [urls], policy: 'one-per-person' }.
+  // Policies decide what repeated appearances of one person are worth; they run
+  // strictly AFTER the order is fixed (§6). 'one-per-person' is the only policy
+  // implemented so far; multi-ticket policies (per-comment caps, weights) land
+  // in the same slot without touching extraction.
   function buildTickets(html, opts) {
+    const policy = (opts && opts.policy) || 'one-per-person';
+    if (policy !== 'one-per-person')
+      throw new Error('ticket policy "' + policy + '" not implemented by ' + CLASS.name + ' v' + VERSION);
     const exclude = new Set(((opts && opts.exclude) || []).map(normalizeUrl).filter(Boolean));
     const entries = parseDump(html);
     const seen = new Set();
     const tickets = [];
     for (const e of entries) {
       if (!e.url) continue;                 // company pages, composer boxes
-      if (exclude.has(e.url)) continue;     // organizer
-      if (seen.has(e.url)) continue;        // dedupe, first occurrence wins
+      if (exclude.has(e.url)) continue;     // published excludes (organizer)
+      if (seen.has(e.url)) continue;        // one-per-person: first occurrence wins
       seen.add(e.url);
       tickets.push({ ticket: 'TICKET-' + String(tickets.length + 1).padStart(4, '0'), url: e.url });
     }
-    return { version: VERSION, entriesTotal: entries.length, tickets: tickets };
+    return { version: VERSION, class: CLASS, policy: policy,
+             entriesTotal: entries.length, tickets: tickets };
   }
 
-  return { VERSION: VERSION, normalizeUrl: normalizeUrl, parseDump: parseDump, buildTickets: buildTickets };
+  return { VERSION: VERSION, CLASS: CLASS, normalizeUrl: normalizeUrl,
+           parseDump: parseDump, buildTickets: buildTickets };
 });

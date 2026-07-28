@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- uvl index.html v0.4 — UVS Lottery draw page + operator console.
+<!-- uvl index.html v0.4.5 — UVS Lottery draw page + operator console.
      Self-contained by spec §15.2: no CDN, no external CSS/fonts, no analytics.
      Network calls are protocol only: ./draws/*.json (same origin), GitHub API
      (operator actions), drand (round check). Test mode = /uvl-test/ in path. -->
@@ -281,7 +281,17 @@ async function maybeReveal() {
       const round = await uvlDraw.fetchDeciding(s.targetRound);   // §7.1 fallback inside
       if (!round) { setTimeout(poll, 5000); return; }
       await renderRevealed(round);
-    } catch (e) { console.error(e); setTimeout(poll, 15000); }
+    } catch (e) {
+      console.error(e);
+      // §12: if drand is unreachable but an archived result exists, derive from it —
+      // the archive stores the randomness, so the computation is still re-done here
+      if (state.result && state.result.randomness) {
+        await renderRevealed({ round: state.result.round,
+                               randomness: state.result.randomness, archived: true });
+        return;
+      }
+      setTimeout(poll, 15000);
+    }
   };
   poll();
 }
@@ -295,8 +305,15 @@ async function renderRevealed(round) {
   const order = await uvlDraw.permute(ids, combined);
   const byUrl = {}; s.tickets.forEach(t => byUrl[t.url] = t.ticket);
   const win = order[0], succ = order[1];
+  // §12: live derivation and the Actions archive must agree — a mismatch is surfaced
+  const arch = state.result;
+  const mismatch = arch && arch.winner && arch.winner !== win.id;
   S('winnerBox').innerHTML =
-    '<div style="font-size:20px;margin:6px 0"><b>' + byUrl[win.id] + '</b> — ' + win.id + '</div>'
+    (mismatch ? '<div class="err"><b>⚠ archived result disagrees with this computation'
+      + '</b> — archive says ' + arch.winner + '. Do not trust either until resolved.</div>' : '')
+    + (round.archived ? '<div class="muted">drand unreachable — derived from the archived '
+      + 'randomness (result.json), recomputed in this browser</div>' : '')
+    + '<div style="font-size:20px;margin:6px 0"><b>' + byUrl[win.id] + '</b> — ' + win.id + '</div>'
     + '<div class="muted">round ' + round.round
     + (round.round !== s.targetRound ? ' (fallback: first available ≥ ' + s.targetRound + ', §7.1)' : '')
     + ' · randomness <span class="hash">' + round.randomness.slice(0,16) + '…</span></div>'
@@ -362,13 +379,29 @@ S('btnInitDraw').onclick = async () => {
         + (s ? 'sealed, round pending' : 'OPEN') + ') — it must reach its round first');
     }
     // v0.4.4: an id is forever — refuse ANY id that ever existed (active, archived
-    // or orphaned). Re-initializing test-draw-one clobbered a sealed draw's chain.
+    // or orphaned). v0.4.5: on collision, find the first free suffix and offer it.
     S('initStatus').textContent = 'checking id against the repository…';
-    const probe = await fetch(REPO_API + '/contents/' + DATA_ROOT + '/draws/' + id + '/meta.json',
+    const gh = p => fetch(REPO_API + '/contents/' + DATA_ROOT + '/draws/' + p + '/meta.json',
       { headers: { Authorization: 'Bearer ' + PAT, Accept: 'application/vnd.github+json' } });
-    if (probe.ok) throw new Error('draw "' + id + '" already exists in the repository — ids are never reused, pick a new one');
+    if ((await gh(id)).ok) {
+      let free = null;
+      for (let k = 2; k <= 30; k++)
+        if (!(await gh(id + '-' + k)).ok) { free = id + '-' + k; break; }
+      if (free) {
+        S('newDrawId').value = free;
+        throw new Error('"' + id + '" already exists — ids are never reused; suggested "'
+          + free + '", press init draw again');
+      }
+      throw new Error('"' + id + '" and 29 suffixes already exist — pick a different id');
+    }
     S('initStatus').textContent = 'committing…';
-    const meta = { id: id, title: title, summary: '', prize: '', links: {} };
+    const meta = { id: id, title: title, summary: '', prize: '', links: {},
+      profile: {                                        // v0.4.5: draw profile (frozen at seal)
+        extract: { class: uvlParser.CLASS.name, extends: uvlParser.CLASS.extends,
+                   version: uvlParser.CLASS.version },
+        tickets: { policy: 'one-per-person' },
+        excludes: [ORGANIZER]
+      } };
     const prevArchive = (state.index && state.index.archived) || [];
     const idx = { active: id,
                   archived: state.draw ? [...prevArchive, state.draw] : prevArchive };
@@ -386,10 +419,18 @@ S('btnInitDraw').onclick = async () => {
 };
 
 // ---- operator: upload with diff (confirm-or-nothing, §11.4) ----------------
+// draw profile with safe defaults for draws initialized before v0.4.5
+function drawProfile() {
+  const p = (state.meta && state.meta.profile) || {};
+  return { extract: p.extract || { class: 'linkedin-spa' },
+           tickets: p.tickets || { policy: 'one-per-person' },
+           excludes: p.excludes || [ORGANIZER] };
+}
 S('dumpFile').onchange = async (ev) => {
   const f = ev.target.files[0]; if (!f) return;
   const html = await f.text();
-  const res = uvlParser.buildTickets(html, { exclude: [ORGANIZER] });
+  const prof = drawProfile();
+  const res = uvlParser.buildTickets(html, { exclude: prof.excludes, policy: prof.tickets.policy });
   const prev = currentTickets().map(t => t.url);
   const now = res.tickets.map(t => t.url);
   const added = now.filter(u => !prev.includes(u));
@@ -524,7 +565,9 @@ S('btnSeal').onclick = async () => {
       sealedAt: new Date().toISOString(), chainLink: cur.n, dumpFile: cur.file,
       dumpSha256: cur.sha256, ticketListFile: 'tickets.json', ticketListSha256: ticketsSha,
       parserSnapshotFile: 'uvl-parser-snapshot.js', parserSha256: parserSha,
-      parserVersion: uvlParser.VERSION, prizeSha256: preflight.prizeSha,
+      parserVersion: uvlParser.VERSION,
+      profile: drawProfile(),                           // v0.4.5: frozen with everything else
+      prizeSha256: preflight.prizeSha,
       drand: { beacon: 'quicknet', chainHash: uvlDraw.QUICKNET.chainHash,
                period: preflight.period, genesisTime: preflight.genesis },
       targetRound: preflight.targetRound, targetRoundTimeUtc: preflight.targetTime,
