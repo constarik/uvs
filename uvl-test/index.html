@@ -172,36 +172,61 @@ async function j(url) { // fetch JSON, null on 404 — absent files ARE states
 }
 
 // ---- boot ------------------------------------------------------------------
-// /uvl/            -> the active draw (draws/index.json)
+// draws/index.json is an append-only REGISTRY: { "draws": ["id", ...] } — nothing
+// else. There is no stored "active" flag anywhere: a draw's status is derived from
+// its own files (no seal.json = OPEN; seal + round pending = SEALED; round reached
+// = finished). Any number of draws can be live at once.
+// /uvl/            -> the single live draw, or a chooser if several / none
 // /uvl/?draw=<id>  -> that specific draw, forever — the URL posts link to
-let VIEW_ONLY = false;                  // true when viewing a non-active draw
 async function boot() {
   S('buildVer').textContent = 'build ' + (await (await fetch('version.txt?t='+Date.now())).text()).trim();
-  const index = await j('draws/index.json');
-  state.index = index;
+  const reg = await j('draws/index.json');
+  const ids = (reg && (reg.draws || [].concat(reg.active || [], reg.archived || []))) || [];
+  state.index = { draws: ids };
   const wanted = new URLSearchParams(location.search).get('draw');
-  const target = wanted || (index && index.active);
-  if (!target) { setPhase(null); S('secNoDraw').hidden = false; return; }
-  state.draw = target;
-  VIEW_ONLY = !!(wanted && (!index || wanted !== index.active));
-  const base = 'draws/' + state.draw + '/';
+  if (wanted) return loadDraw(wanted);
+  // no param: derive statuses, then route
+  const seals = await Promise.all(ids.map(id => j('draws/' + id + '/seal.json')));
+  const live = ids.filter((id, i) =>
+    !seals[i] || Date.now() < Date.parse(seals[i].targetRoundTimeUtc));
+  state.finished = ids.filter(id => !live.includes(id));
+  if (live.length === 1) return loadDraw(live[0]);
+  setPhase(null);
+  S('secNoDraw').hidden = false;
+  S('secNoDraw').querySelector('h2').textContent =
+    live.length ? 'Several draws are live' : 'No live draw';
+  S('secNoDraw').querySelector('p').innerHTML =
+    (live.length
+      ? 'Pick one: ' + live.map(id => '<a href="?draw=' + encodeURIComponent(id) + '">' + id + '</a>').join(' · ')
+      : 'Nothing is running right now. Draws appear here when announced.');
+  hideOpsNeedingDraw();
+  renderDrawLists();
+}
+async function loadDraw(id) {
+  state.draw = id;
+  const base = 'draws/' + id + '/';
   [state.meta, state.chain, state.seal, state.result] = await Promise.all(
     [j(base+'meta.json'), j(base+'chain.json'), j(base+'seal.json'), j(base+'result.json')]);
-  if (!state.meta) { setPhase(null); S('secNoDraw').hidden = false;
-    S('secNoDraw').querySelector('p').textContent = 'No draw "' + state.draw + '" here.'; return; }
+  if (!state.meta) { setPhase(null); S('secNoDraw').hidden = false; state.draw = null;
+    S('secNoDraw').querySelector('p').textContent = 'No draw "' + id + '" here.';
+    hideOpsNeedingDraw(); return; }
   render();
-  renderPastDraws();
-  if (VIEW_ONLY) {                        // archived view: no dead operator controls
-    S('secOperator').innerHTML =
-      '<p class="muted">Archived draw — read-only. The operator console lives on the '
-      + '<a href="' + location.pathname + '">active draw page</a>.</p>';
-  }
+  renderDrawLists();
 }
-function renderPastDraws() {
-  const arch = (state.index && state.index.archived) || [];
-  if (!arch.length) return;
+function hideOpsNeedingDraw() {          // upload/seal need a draw page under them
+  document.querySelectorAll('#secOperator h2').forEach(h => {
+    if (/Upload dump|Seal/.test(h.textContent)) {
+      let n = h;
+      while (n && n.tagName !== 'HR') { const next = n.nextElementSibling; n.hidden = true; n = next; }
+    }
+  });
+}
+function renderDrawLists() {
+  const fin = state.finished ||
+    (state.index.draws || []).filter(id => id !== state.draw);
+  if (!fin.length) return;
   const sec = document.createElement('section');
-  sec.innerHTML = '<h2>Past draws</h2>' + arch.map(id =>
+  sec.innerHTML = '<h2>All draws</h2>' + fin.map(id =>
     '<div><a href="?draw=' + encodeURIComponent(id) + '">' + id + '</a></div>').join('');
   document.querySelector('main').appendChild(sec);
 }
@@ -371,26 +396,20 @@ S('btnCheckTok').onclick = async () => {
 // ---- operator: init draw (v0.3) --------------------------------------------
 const DATA_ROOT = TEST ? 'uvl-test' : 'uvl';      // repo path root for data commits
 function needPat() { if (!PAT) throw new Error('paste and check a token first'); }
-function needActiveView() {
-  if (VIEW_ONLY) throw new Error('viewing an archived draw — operator actions apply to the active one at ' + location.pathname);
+function needDrawPage() {
+  if (!state.draw) throw new Error('open a draw page first (pick one from the list)');
 }
 S('newDrawId').oninput = S('newDrawTitle').oninput = () => { S('initStatus').textContent = ''; };
 S('btnInitDraw').onclick = async () => {
   const id = S('newDrawId').value.trim();
   try {
-    needPat(); needActiveView();
+    needPat();
     const title = S('newDrawTitle').value.trim() || id;
     if (!/^[a-z0-9][a-z0-9-]{2,60}$/.test(id)) throw new Error('"' + id + '" — id: lowercase letters, digits, dashes');
     if (TEST && !id.startsWith('test-')) throw new Error('"' + id + '" — rehearsal draw ids must start with "test-" (§16.3)');
     if (!TEST && id.startsWith('test-')) throw new Error('"' + id + '" — "test-" ids belong in /uvl-test/ (§16.3)');
-    if (state.draw) {                                   // one ACTIVE draw at a time
-      const s = state.seal;
-      const finished = s && Date.now() > Date.parse(s.targetRoundTimeUtc);
-      if (!finished) throw new Error('draw "' + state.draw + '" is still live ('
-        + (s ? 'sealed, round pending' : 'OPEN') + ') — it must reach its round first');
-    }
-    // v0.4.4: an id is forever — refuse ANY id that ever existed (active, archived
-    // or orphaned). v0.4.5: on collision, find the first free suffix and offer it.
+    // ids are forever — refuse ANY id that ever existed; on collision, suggest a suffix.
+    // Any number of draws may be live at once: no "active" concept exists (v0.4.9).
     S('initStatus').textContent = 'checking id against the repository…';
     const gh = p => fetch(REPO_API + '/contents/' + DATA_ROOT + '/draws/' + p + '/meta.json',
       { headers: { Authorization: 'Bearer ' + PAT, Accept: 'application/vnd.github+json' } });
@@ -405,27 +424,33 @@ S('btnInitDraw').onclick = async () => {
       }
       throw new Error('"' + id + '" and 29 suffixes already exist — pick a different id');
     }
+    // registry is append-only: read the CURRENT list from the repo, append, write back
     S('initStatus').textContent = 'committing…';
     const meta = { id: id, title: title, summary: '', prize: '', links: {},
-      profile: {                                        // v0.4.5: draw profile (frozen at seal)
+      profile: {                                        // draw profile (frozen at seal)
         extract: { class: uvlParser.CLASS.name, extends: uvlParser.CLASS.extends,
                    version: uvlParser.CLASS.version },
         tickets: { policy: 'one-per-person' },
         excludes: [ORGANIZER]
       } };
-    const prevArchive = (state.index && state.index.archived) || [];
-    const idx = { active: id,
-                  archived: state.draw ? [...prevArchive, state.draw] : prevArchive };
-    const sha = await uvlGh.commitFiles(PAT, 'uvl(' + DATA_ROOT + '): init draw ' + id
-        + (state.draw ? ' (archive ' + state.draw + ')' : ''), [
+    const regProbe = await fetch(REPO_API + '/contents/' + DATA_ROOT + '/draws/index.json?ref=master',
+      { headers: { Authorization: 'Bearer ' + PAT, Accept: 'application/vnd.github+json' }, cache: 'no-store' });
+    let regIds = [];
+    if (regProbe.ok) {
+      const rj = await regProbe.json();
+      const parsed = JSON.parse(new TextDecoder().decode(
+        Uint8Array.from(atob(rj.content.replace(/\n/g, '')), ch => ch.charCodeAt(0))));
+      regIds = parsed.draws || [].concat(parsed.active || [], parsed.archived || []);
+    }
+    if (regIds.includes(id)) throw new Error('"' + id + '" already in the registry');
+    const idx = { draws: [...regIds, id] };
+    const sha = await uvlGh.commitFiles(PAT, 'uvl(' + DATA_ROOT + '): init draw ' + id, [
       { path: DATA_ROOT + '/draws/' + id + '/meta.json', text: JSON.stringify(meta, null, 2) },
       { path: DATA_ROOT + '/draws/index.json', text: JSON.stringify(idx, null, 2) }
     ]);
-    S('initStatus').innerHTML = '<span class="ok">commit ' + sha.slice(0,7) + '</span> — draw is active; you can upload a dump right away';
+    S('initStatus').innerHTML = '<span class="ok">commit ' + sha.slice(0,7)
+      + '</span> — draw created; <a href="?draw=' + encodeURIComponent(id) + '">open its page</a> to upload a dump';
     state.index = idx;
-    state.draw = id; state.meta = meta; state.chain = null; state.seal = null; state.result = null;
-    S('secSealed').hidden = true; S('secRevealed').hidden = true;
-    render();
   } catch (e) { S('initStatus').innerHTML = '<span class="err">' + e.message + '</span>'; }
 };
 
@@ -471,7 +496,7 @@ S('btnCancelUpload').onclick = () => {
 };
 S('btnConfirmUpload').onclick = async () => {
   try {
-    needPat(); needActiveView();
+    needPat(); needDrawPage();
     const c = state.candidate;
     if (!c) throw new Error('no candidate — choose a file');
     if (!state.draw) throw new Error('no active draw — init one first');
@@ -523,7 +548,7 @@ S('gapMin').value = TEST ? '10' : String(48 * 60);          // §8: 48 h; rehear
 let preflight = null;
 S('btnPreflight').onclick = async () => {
   try {
-    needPat(); needActiveView();
+    needPat(); needDrawPage();
     if (!state.draw) throw new Error('no active draw');
     if (state.seal) throw new Error('already SEALED — seal is single-use (§11.3)');
     const links = (state.chain && state.chain.links) || [];
@@ -560,7 +585,7 @@ S('btnPreflight').onclick = async () => {
 };
 S('btnSeal').onclick = async () => {
   try {
-    needPat(); needActiveView();
+    needPat(); needDrawPage();
     if (!preflight) throw new Error('run preflight first');
     if (S('sealTypeId').value.trim() !== state.draw)
       throw new Error('typed id does not match "' + state.draw + '"');
