@@ -103,10 +103,16 @@
     <p class="muted">Creates <span class="hash">draws/index.json</span> + a metadata
     skeleton and makes the draw active. One active draw at a time.</p>
     <div class="row">
-      <input type="text" id="newDrawId" placeholder="draw id, e.g. test-uvl-2026-07-27-dryrun" style="flex:1">
+      <label for="newDrawTitle" style="min-width:60px"><b>Title</b></label>
+      <input type="text" id="newDrawTitle" placeholder="human name, can repeat across draws — e.g. Test Draw One" style="flex:1">
     </div>
     <div class="row">
-      <input type="text" id="newDrawTitle" placeholder="title, e.g. Dry run" style="flex:1">
+      <label for="newDrawId" style="min-width:60px"><b>Id</b></label>
+      <input type="text" id="newDrawId" placeholder="unique forever: folder + page URL + serverSeed — e.g. test-draw-one" style="flex:1">
+    </div>
+    <p class="muted" style="margin:2px 0 6px">Id is technical identity (never reused;
+    taken ids get a suffix suggested automatically). Title is just the page heading.</p>
+    <div class="row">
       <button id="btnInitDraw" class="primary">init draw</button>
       <span id="initStatus" class="muted"></span>
     </div>
