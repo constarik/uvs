@@ -10,7 +10,7 @@
   const BRANCH = 'master';
 
   async function gh(pat, path, opts) {
-    const r = await fetch(API + path, Object.assign({}, opts, {
+    const r = await fetch(API + path, Object.assign({ cache: 'no-store' }, opts, {
       headers: Object.assign({
         Authorization: 'Bearer ' + pat,
         Accept: 'application/vnd.github+json',
@@ -36,12 +36,22 @@
 
   // files: [{path, text}] or [{path, buffer}]. Atomic when the token allows /git/*;
   // otherwise sequential Contents-API commits in the given order (put pointers last).
+  // v0.3: a 422 non-fast-forward (head moved / stale read replica) is retried with a
+  // fresh head — the whole tree is rebuilt, so nothing stale can land.
   async function commitFiles(pat, message, files) {
-    try {
-      return await commitAtomic(pat, message, files);
-    } catch (e) {
-      if (!/HTTP 403/.test(String(e.message))) throw e;
-      return await commitSequential(pat, message, files) + ' (sequential fallback)';
+    for (let attempt = 1; ; attempt++) {
+      try {
+        return await commitAtomic(pat, message, files);
+      } catch (e) {
+        const msg = String(e.message);
+        if (/HTTP 403/.test(msg))
+          return await commitSequential(pat, message, files) + ' (sequential fallback)';
+        if (/HTTP 422/.test(msg) && /fast forward/i.test(msg) && attempt < 4) {
+          await new Promise(r => setTimeout(r, 800 * attempt));
+          continue;                                  // re-read head, rebuild, retry
+        }
+        throw e;
+      }
     }
   }
 
