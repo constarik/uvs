@@ -361,6 +361,12 @@ S('btnInitDraw').onclick = async () => {
       if (!finished) throw new Error('draw "' + state.draw + '" is still live ('
         + (s ? 'sealed, round pending' : 'OPEN') + ') — it must reach its round first');
     }
+    // v0.4.4: an id is forever — refuse ANY id that ever existed (active, archived
+    // or orphaned). Re-initializing test-draw-one clobbered a sealed draw's chain.
+    S('initStatus').textContent = 'checking id against the repository…';
+    const probe = await fetch(REPO_API + '/contents/' + DATA_ROOT + '/draws/' + id + '/meta.json',
+      { headers: { Authorization: 'Bearer ' + PAT, Accept: 'application/vnd.github+json' } });
+    if (probe.ok) throw new Error('draw "' + id + '" already exists in the repository — ids are never reused, pick a new one');
     S('initStatus').textContent = 'committing…';
     const meta = { id: id, title: title, summary: '', prize: '', links: {} };
     const prevArchive = (state.index && state.index.archived) || [];
@@ -419,10 +425,22 @@ S('btnConfirmUpload').onclick = async () => {
     if (!state.draw) throw new Error('no active draw — init one first');
     if (state.seal) throw new Error('draw is SEALED — the chain is closed (§11.3)');
     S('btnConfirmUpload').disabled = true;
+    S('upStatus').textContent = 'reading current chain from the repository…';
+    // v0.4.4: read-modify-write against the REPOSITORY, never page memory — a stale
+    // tab must extend the real chain, not overwrite it (append-only, §11.4)
+    const chainUrl = REPO_API + '/contents/' + DATA_ROOT + '/draws/' + state.draw + '/chain.json';
+    const chainProbe = await fetch(chainUrl + '?ref=master',
+      { headers: { Authorization: 'Bearer ' + PAT, Accept: 'application/vnd.github+json' } });
+    let repoLinks = [];
+    if (chainProbe.ok) {
+      const cj = await chainProbe.json();
+      repoLinks = JSON.parse(new TextDecoder().decode(
+        Uint8Array.from(atob(cj.content.replace(/\n/g, '')), ch => ch.charCodeAt(0)))).links || [];
+    }
     S('upStatus').textContent = 'hashing…';
     const buf = new TextEncoder().encode(c.html);
     const hash = await uvlGh.sha256Hex(buf.buffer);
-    const n = ((state.chain && state.chain.links) || []).length + 1;
+    const n = repoLinks.length + 1;
     const ts = new Date().toISOString().replace(/[:]/g, '-').replace(/\..+/, 'Z');
     const file = String(n).padStart(3, '0') + '-' + ts + '.html';
     const capturedAt = new Date(c.fileMtime || Date.now()).toISOString();
@@ -430,7 +448,7 @@ S('btnConfirmUpload').onclick = async () => {
                    uploadedAt: new Date().toISOString(), sha256: hash,
                    entriesTotal: c.entriesTotal, tickets: c.tickets,
                    parserVersion: uvlParser.VERSION };
-    const chain = { links: [ ...(state.chain && state.chain.links || []), link ] };
+    const chain = { links: [ ...repoLinks, link ] };   // v0.4.4: extend the repo's chain
     const base = DATA_ROOT + '/draws/' + state.draw + '/';
     S('upStatus').textContent = 'committing (atomic)…';
     const sha = await uvlGh.commitFiles(PAT,
