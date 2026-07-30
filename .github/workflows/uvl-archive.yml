@@ -26,7 +26,11 @@ jobs:
         run: node scripts/uvl-archive.cjs
       - name: commit result files (if any)
         run: |
-          git add -A uvl/draws uvl-test/draws 2>/dev/null || true
+          # add only roots that exist: a missing pathspec fails `git add` ENTIRELY,
+          # silently dropping written results (bug found 2026-07-30, test-scnd)
+          for d in uvl/draws uvl-test/draws; do
+            [ -d "$d" ] && git add -A "$d"
+          done
           if git diff --cached --quiet; then
             echo "nothing to archive"
           else
