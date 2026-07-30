@@ -1,0 +1,16 @@
+{
+  "draw": "test-draw-one-2",
+  "archivedAt": "2026-07-30T06:02:14.684Z",
+  "round": 30813701,
+  "targetRound": 30813701,
+  "usedFallback": false,
+  "randomness": "56b76ecb511f7a331e936ff368745fd2f5c7adf9b7f8dd37606d208f2f662ea7",
+  "signature": "942b099a4fa57fd940fafadf1e6eb64c0f1f29a9eeb5d5925a7cd2bc5519363cf0e5309f714587d6490d53913079f5e4",
+  "combinedSeed": "a4cc4a7dd7c337d9ede071f3f222c1883d2baec1fd1b4addd53622da479efcdb",
+  "winner": "linkedin.com/in/peter-hart-88516328",
+  "winnerTicket": "TICKET-0071",
+  "winnerScore": "fd20831aa5abb1d918d69714247bccaff0eb94a48c6e07e4c4fcda07df22decc",
+  "successor": "linkedin.com/in/agni-m",
+  "successorTicket": "TICKET-0076",
+  "note": "archive only (spec §12) — the result is derivable by anyone from seal.json and the drand round"
+}
