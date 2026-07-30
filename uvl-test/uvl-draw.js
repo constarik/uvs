@@ -1,4 +1,6 @@
-// uvl-draw v0.1 — browser port of the uvs-sdk derivation core + drand quicknet helpers.
+// uvl-draw v0.2 — browser port of the uvs-sdk derivation core + drand quicknet helpers.
+// v0.2: drand is fetched through a list of official mirrors with fallback — a single
+// endpoint rate-limiting a client (e.g. GitHub Actions runners) must not stall a draw.
 // Semantics are a 1:1 port of uvs-sdk/src/lottery.js and drand.js (read 2026-07-27):
 //   combinedSeed = SHA-256(serverSeed + ":" + drandRandomness)
 //   score(id)    = SHA-256(combinedSeed + ":" + id)
@@ -10,7 +12,25 @@
     beacon: 'quicknet', period: 3, genesis: 1692803367,
     chainHash: '52db9ba70e0cc0f6eaf7803dd07447a1f5477735fd3f661792ba94600c84e971'
   };
-  const API = 'https://api.drand.sh/' + QUICKNET.chainHash;
+  const BASES = [
+    'https://api.drand.sh/' + QUICKNET.chainHash,
+    'https://api2.drand.sh/' + QUICKNET.chainHash,
+    'https://api3.drand.sh/' + QUICKNET.chainHash,
+    'https://drand.cloudflare.com/' + QUICKNET.chainHash
+  ];
+  // try mirrors in order; non-OK statuses that are not 404 move to the next mirror
+  async function apiGet(path) {
+    const errs = [];
+    for (const base of BASES) {
+      try {
+        const r = await fetch(base + path, { cache: 'no-store' });
+        if (r.status === 404) return null;             // a real answer: not there yet
+        if (!r.ok) { errs.push(base + ' -> HTTP ' + r.status); continue; }
+        return r.json();
+      } catch (e) { errs.push(base + ' -> ' + e.message); }
+    }
+    throw new Error('all drand mirrors failed for ' + path + ': ' + errs.join('; '));
+  }
 
   async function sha256Str(s) {
     const d = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s));
@@ -23,20 +43,17 @@
   const timeOfRound = round => QUICKNET.genesis + (round - 1) * QUICKNET.period;
 
   async function fetchInfo() {           // live values at seal time (spec §8: don't hardcode)
-    const r = await fetch(API + '/info');
-    if (!r.ok) throw new Error('drand /info -> HTTP ' + r.status);
-    return r.json();                     // { period, genesis_time, ... }
+    const r = await apiGet('/info');
+    if (!r) throw new Error('drand /info -> 404');
+    return r;                            // { period, genesis_time, ... }
   }
   async function fetchRound(round) {     // null while the round does not exist yet
-    const r = await fetch(API + '/public/' + round);
-    if (r.status === 404) return null;
-    if (!r.ok) throw new Error('drand round ' + round + ' -> HTTP ' + r.status);
-    return r.json();                     // { round, randomness, signature }
+    return apiGet('/public/' + round);   // { round, randomness, signature } | null
   }
   async function fetchLatest() {
-    const r = await fetch(API + '/public/latest');
-    if (!r.ok) throw new Error('drand latest -> HTTP ' + r.status);
-    return r.json();
+    const r = await apiGet('/public/latest');
+    if (!r) throw new Error('drand latest -> 404');
+    return r;
   }
   // §7.1 fallback: the deciding round is the FIRST AVAILABLE round with number >= target.
   // Returns null while the chain has not reached the target yet.
