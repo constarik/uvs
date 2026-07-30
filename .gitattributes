@@ -1,0 +1,10 @@
+# uvLottery (spec §17). Every artifact in these areas is hash-committed: the dump,
+# the ticket list, the parser snapshot, the verifier snapshot, seal.json. Git must
+# never rewrite a byte of them — a checkout that converts line endings turns an
+# honest draw into a MISMATCH for anyone verifying on Windows.
+#
+# `-text` means "no conversion in either direction", not "treat as broken".
+# Scope is deliberately the whole area, code included: what gets hashed and what
+# does not should not depend on remembering to list it here.
+uvl/**       -text
+uvl-test/**  -text
