@@ -613,6 +613,23 @@ S('btnSeal').onclick = async () => {
     const base = DATA_ROOT + '/draws/' + state.draw + '/';
     const parserSrc = await (await fetch('uvl-parser.js?t=' + Date.now())).text();
     const parserSha = await uvlGh.sha256Hex(new TextEncoder().encode(parserSrc).buffer);
+    // v0.4.13 — snapshot the CLI verifier too (spec §17.3). It is OUTSIDE the trust
+    // chain: it re-derives what is published and decides nothing. So its absence must
+    // never abort a single-use, time-boxed seal — on failure the seal records null and
+    // the reason, and says so out loud. No hash: §17.3 — a verifier hash carries no
+    // signal, and next to parserSha256 it would read as if it were part of the proof.
+    let verifySrc = null, verifyVersion = null, verifyNote = null;
+    try {
+      const vr = await fetch('uvl-verify.cjs?t=' + Date.now(), { cache: 'no-store' });
+      if (!vr.ok) throw new Error('HTTP ' + vr.status);
+      verifySrc = await vr.text();
+      const vm = verifySrc.match(/VERSION\s*=\s*'([^']+)'/);
+      verifyVersion = vm ? vm[1] : null;
+      if (!verifySrc.trim()) throw new Error('empty file');
+    } catch (e) {
+      verifySrc = null; verifyVersion = null;
+      verifyNote = 'verifier snapshot unavailable at seal time: ' + e.message;
+    }
     const ticketsText = JSON.stringify({ draw: state.draw, chainLink: cur.n,
       dumpSha256: cur.sha256, tickets: cur.tickets }, null, 2);
     const ticketsSha = await uvlGh.sha256Hex(new TextEncoder().encode(ticketsText).buffer);
@@ -621,6 +638,8 @@ S('btnSeal').onclick = async () => {
       dumpSha256: cur.sha256, ticketListFile: 'tickets.json', ticketListSha256: ticketsSha,
       parserSnapshotFile: 'uvl-parser-snapshot.js', parserSha256: parserSha,
       parserVersion: uvlParser.VERSION,
+      verifierSnapshotFile: verifySrc ? 'uvl-verify-snapshot.cjs' : null,
+      verifierVersion: verifyVersion,
       profile: drawProfile(),                           // v0.4.5: frozen with everything else
       prizeSha256: preflight.prizeSha,
       drand: { beacon: 'quicknet', chainHash: uvlDraw.QUICKNET.chainHash,
@@ -628,14 +647,18 @@ S('btnSeal').onclick = async () => {
       targetRound: preflight.targetRound, targetRoundTimeUtc: preflight.targetTime,
       fallbackRule: 'the outcome is decided by the first available round with number >= target (§7.1)',
       tickets: cur.tickets };
+    if (verifyNote) seal.verifierNote = verifyNote;
     // pointer (seal.json) LAST — matters on the sequential fallback path
+    const sealFiles = [ { path: base + 'tickets.json', text: ticketsText },
+        { path: base + 'uvl-parser-snapshot.js', text: parserSrc } ];
+    if (verifySrc) sealFiles.push({ path: base + 'uvl-verify-snapshot.cjs', text: verifySrc });
+    sealFiles.push({ path: base + 'seal.json', text: JSON.stringify(seal, null, 2) });
     const sha = await uvlGh.commitFiles(PAT,
       'uvl(' + DATA_ROOT + '): SEAL ' + state.draw + ' — ' + cur.tickets.length
       + ' tickets, target round ' + preflight.targetRound,
-      [ { path: base + 'tickets.json', text: ticketsText },
-        { path: base + 'uvl-parser-snapshot.js', text: parserSrc },
-        { path: base + 'seal.json', text: JSON.stringify(seal, null, 2) } ]);
-    S('sealStatus').innerHTML = '<span class="ok">SEALED — commit ' + String(sha).slice(0,7) + '</span>';
+      sealFiles);
+    S('sealStatus').innerHTML = '<span class="ok">SEALED — commit ' + String(sha).slice(0,7) + '</span>'
+      + (verifyNote ? ' <span class="err">· ' + verifyNote + '</span>' : '');
     state.seal = seal; preflight = null;
     S('sealConfirmRow').hidden = true; S('preflightBox').hidden = true;
     render();
