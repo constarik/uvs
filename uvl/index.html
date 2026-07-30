@@ -99,10 +99,12 @@
     <div class="row">
       <button id="btnCheckTok">check token</button><span id="tokStatus" class="muted"></span>
     </div>
-    <hr style="border:none;border-top:1px solid var(--line)">
+    <hr id="opsInitHr" style="border:none;border-top:1px solid var(--line)">
+    <div id="opsInit">
     <h2>Init draw</h2>
-    <p class="muted">Creates <span class="hash">draws/index.json</span> + a metadata
-    skeleton and makes the draw active. One active draw at a time.</p>
+    <p class="muted">Creates the draw folder and its metadata skeleton, and appends the id
+    to <span class="hash">draws/index.json</span>. Any number of draws may be live at once.
+    This form exists only on <span class="hash">?new=1</span> — never on a draw page (v0.4.14).</p>
     <div class="row">
       <label for="newDrawTitle" style="min-width:60px"><b>Title</b></label>
       <input type="text" id="newDrawTitle" placeholder="human name, can repeat across draws — e.g. Test Draw One" style="flex:1">
@@ -116,6 +118,7 @@
     <div class="row">
       <button id="btnInitDraw" class="primary">init draw</button>
       <span id="initStatus" class="muted"></span>
+    </div>
     </div>
     <hr style="border:none;border-top:1px solid var(--line)">
     <h2 id="hUpload">Upload dump</h2>
@@ -177,42 +180,80 @@ async function j(url) { // fetch JSON, null on 404 — absent files ARE states
 // else. There is no stored "active" flag anywhere: a draw's status is derived from
 // its own files (no seal.json = OPEN; seal + round pending = SEALED; round reached
 // = finished). Any number of draws can be live at once.
-// /uvl/            -> the single live draw, or a chooser if several / none
+// /uvl/            -> index: live draws, "+ new draw", collapsed archive (v0.4.14)
+// /uvl/?new=1      -> the only page carrying the init form
 // /uvl/?draw=<id>  -> that specific draw, forever — the URL posts link to
 async function boot() {
   S('buildVer').textContent = 'build ' + (await (await fetch('version.txt?t='+Date.now())).text()).trim();
   const reg = await j('draws/index.json');
   const ids = (reg && (reg.draws || [].concat(reg.active || [], reg.archived || []))) || [];
   state.index = { draws: ids };
-  const wanted = new URLSearchParams(location.search).get('draw');
+  const q = new URLSearchParams(location.search);
+  const wanted = q.get('draw');
   if (wanted) return loadDraw(wanted);
-  // no param: derive statuses, then route
-  const seals = await Promise.all(ids.map(id => j('draws/' + id + '/seal.json')));
-  const live = ids.filter((id, i) =>
-    !seals[i] || Date.now() < Date.parse(seals[i].targetRoundTimeUtc));
-  state.finished = ids.filter(id => !live.includes(id));
-  if (live.length === 1) return loadDraw(live[0]);
+  // v0.4.14 — a bare URL no longer opens "the single live draw": the root is an index,
+  // and the public arrives on ?draw=<id> permanent pages linked from the post. The init
+  // form lives ONLY on ?new=1, so no draw page carries the one irreversible action.
+  const rows = await Promise.all(ids.map(async id => {
+    const seal = await j('draws/' + id + '/seal.json');
+    if (seal) return { id: id, tickets: (seal.tickets || []).length,
+      phase: Date.now() < Date.parse(seal.targetRoundTimeUtc) ? 'SEALED' : 'REVEALED' };
+    const ch = await j('draws/' + id + '/chain.json');
+    const cur = ch && ch.links && ch.links[ch.links.length - 1];
+    return { id: id, phase: 'OPEN', tickets: cur ? (cur.tickets || []).length : 0 };
+  }));
+  state.finished = rows.filter(r => r.phase === 'REVEALED').map(r => r.id);
   setPhase(null);
-  S('secNoDraw').hidden = false;
-  S('secNoDraw').querySelector('h2').textContent =
-    live.length ? 'Several draws are live' : 'No live draw';
-  S('secNoDraw').querySelector('p').innerHTML =
-    (live.length
-      ? 'Pick one: ' + live.map(id => '<a href="?draw=' + encodeURIComponent(id) + '">' + id + '</a>').join(' · ')
-      : 'Nothing is running right now. Draws appear here when announced.');
   hideOpsNeedingDraw();
-  renderDrawLists();
+  if (q.has('new')) return renderNewPage();
+  renderIndexPage(rows);
+}
+const rowLink = r => '<a href="?draw=' + encodeURIComponent(r.id) + '">' + r.id + '</a>'
+  + ' <span class="muted">— ' + r.phase + ' · ' + r.tickets + ' tickets</span>';
+function renderIndexPage(rows) {
+  const live = rows.filter(r => r.phase !== 'REVEALED');
+  const fin  = rows.filter(r => r.phase === 'REVEALED');
+  hideInit();
+  S('secNoDraw').hidden = false;
+  S('secNoDraw').querySelector('h2').textContent = 'Draws';
+  S('secNoDraw').querySelector('p').innerHTML =
+    (live.length ? live.map(r => '<div>' + rowLink(r) + '</div>').join('')
+                 : '<div class="muted">No live draw right now.</div>')
+    + '<div style="margin:12px 0"><a href="?new=1"><b>+ new draw</b></a></div>'
+    + (fin.length ? '<details><summary>archive (' + fin.length + ')</summary>'
+        + fin.map(r => '<div>' + rowLink(r) + '</div>').join('') + '</details>' : '');
+}
+function renderNewPage() {                 // the only page that offers init (v0.4.14)
+  S('secNoDraw').hidden = false;
+  S('secNoDraw').querySelector('h2').textContent = 'New draw';
+  S('secNoDraw').querySelector('p').innerHTML = 'Fill in the form in the operator console'
+    + ' below — a write token is required. · <a href="./">back to all draws</a>';
+  S('secOperator').querySelector('details').open = true;
+}
+function hideInit() {                      // init exists only on ?new=1
+  ['opsInit', 'opsInitHr'].forEach(k => { const n = S(k); if (n) n.hidden = true; });
 }
 async function loadDraw(id) {
   state.draw = id;
   const base = 'draws/' + id + '/';
   [state.meta, state.chain, state.seal, state.result] = await Promise.all(
     [j(base+'meta.json'), j(base+'chain.json'), j(base+'seal.json'), j(base+'result.json')]);
-  if (!state.meta) { setPhase(null); S('secNoDraw').hidden = false; state.draw = null;
-    S('secNoDraw').querySelector('p').textContent = 'No draw "' + id + '" here.';
-    hideOpsNeedingDraw(); return; }
+  hideInit();
+  if (!state.meta) {
+    setPhase(null); S('secNoDraw').hidden = false; state.draw = null;
+    // the id may simply live in the other root — say where, instead of a dead end
+    const other = DATA_ROOT === 'uvl' ? 'uvl-test' : 'uvl';
+    const oreg = await j('../' + other + '/draws/index.json');
+    const there = oreg && (oreg.draws || []).includes(id);
+    S('secNoDraw').querySelector('h2').textContent = 'No such draw here';
+    S('secNoDraw').querySelector('p').innerHTML = 'No draw "' + id + '" in <span class="hash">/'
+      + DATA_ROOT + '/</span>. ' + (there
+        ? 'It exists in <span class="hash">/' + other + '/</span> — <a href="../' + other
+          + '/?draw=' + encodeURIComponent(id) + '">open it there</a>.'
+        : '<a href="./">See all draws</a>.');
+    hideOpsNeedingDraw(); return;
+  }
   render();
-  renderDrawLists();
 }
 function hideOpsNeedingDraw() {          // upload/seal need a draw page under them
   document.querySelectorAll('#secOperator h2').forEach(h => {
@@ -221,15 +262,6 @@ function hideOpsNeedingDraw() {          // upload/seal need a draw page under t
       while (n && n.tagName !== 'HR') { const next = n.nextElementSibling; n.hidden = true; n = next; }
     }
   });
-}
-function renderDrawLists() {
-  const fin = state.finished ||
-    (state.index.draws || []).filter(id => id !== state.draw);
-  if (!fin.length) return;
-  const sec = document.createElement('section');
-  sec.innerHTML = '<h2>All draws</h2>' + fin.map(id =>
-    '<div><a href="?draw=' + encodeURIComponent(id) + '">' + id + '</a></div>').join('');
-  document.querySelector('main').appendChild(sec);
 }
 
 function setPhase(p) {
@@ -397,6 +429,13 @@ S('btnCheckTok').onclick = async () => {
   if (git.ok) { S('tokStatus').textContent = 'token OK — Git Data API available (atomic commits)'; S('tokStatus').className = 'ok'; }
   else { S('tokStatus').textContent = 'repo visible, but Git Data API -> HTTP ' + git.status
          + ' — will fall back to Contents API (sequential commits)'; S('tokStatus').className = 'err'; }
+  // v0.4.14: a diff prepared before the token arrived must not stay locked out — the
+  // confirm button was evaluated at file-choose time, so re-evaluate it here.
+  if (state.candidate) {
+    S('btnConfirmUpload').disabled = false;
+    S('btnConfirmUpload').title = '';
+    S('upStatus').textContent = 'token accepted — review the diff, then confirm';
+  }
 };
 
 // ---- operator: init draw (v0.3) --------------------------------------------
@@ -407,15 +446,6 @@ function needDrawPage() {
 }
 S('newDrawId').oninput = S('newDrawTitle').oninput = () => { S('initStatus').textContent = ''; };
 S('btnInitDraw').onclick = async () => {
-  if (S('btnInitDraw').dataset.created) {              // "new draw…" resets the frozen form
-    delete S('btnInitDraw').dataset.created;
-    S('btnInitDraw').textContent = 'init draw';
-    S('newDrawId').disabled = S('newDrawTitle').disabled = false;
-    S('newDrawId').value = S('newDrawTitle').value = '';
-    S('initStatus').textContent = '';
-    S('newDrawTitle').focus();
-    return;
-  }
   const id = S('newDrawId').value.trim();
   try {
     needPat();
@@ -464,12 +494,11 @@ S('btnInitDraw').onclick = async () => {
       { path: DATA_ROOT + '/draws/index.json', text: JSON.stringify(idx, null, 2) }
     ]);
     S('initStatus').innerHTML = '<span class="ok">created "' + id + '"</span> — commit '
-      + sha.slice(0,7) + ' · <a href="?draw=' + encodeURIComponent(id) + '">open its page</a> to upload a dump';
+      + sha.slice(0,7) + ' · opening its page…';
     state.index = idx;
-    // created name is a fact, not a draft: freeze the form (v0.4.10)
-    S('newDrawId').disabled = S('newDrawTitle').disabled = true;
-    S('btnInitDraw').textContent = 'new draw…';
-    S('btnInitDraw').dataset.created = '1';
+    // v0.4.14: creation is done here and nothing else happens on this page — go to the
+    // draw's permanent page, which is where upload and seal live.
+    location.href = '?draw=' + encodeURIComponent(id);
   } catch (e) { S('initStatus').innerHTML = '<span class="err">' + e.message + '</span>'; }
 };
 
@@ -500,8 +529,11 @@ S('dumpFile').onchange = async (ev) => {
     + (gone.length  ? gone.map(u => '<span class="diff-del">− ' + u + ' (comment deleted?)</span>').join('\n') + '\n' : '')
     + (!added.length && !gone.length ? '(no changes vs current preview)' : '');
   S('btnConfirmUpload').disabled = !PAT;
+  S('btnConfirmUpload').title = PAT ? '' : 'paste and check a write token first';
   S('btnCancelUpload').disabled = false;
-  S('upStatus').textContent = PAT ? 'review the diff, then confirm' : 'paste a token to enable confirm';
+  S('upStatus').innerHTML = PAT ? 'review the diff, then confirm'
+    : '<span class="err">diff ready — paste a token above and press check token; '
+      + 'confirm unlocks without re-picking the file (v0.4.14)</span>';
 };
 function currentTickets() {
   const c = state.chain;
