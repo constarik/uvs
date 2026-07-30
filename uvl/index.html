@@ -56,6 +56,7 @@
 <header>
   <div id="phaseStamp">…</div>
   <h1 id="title">UVS Lottery</h1>
+  <div id="drawId" class="hash" style="display:none;margin:0 auto 6px;width:fit-content"></div>
   <p class="summary" id="summary"></p>
 </header>
 <main>
@@ -239,6 +240,8 @@ function setPhase(p) {
 function render() {
   const m = state.meta || {};
   S('title').textContent = m.title || 'UVS Lottery';
+  S('drawId').textContent = 'id: ' + state.draw;
+  S('drawId').style.display = 'block';
   S('summary').textContent = m.summary || '';
   // console sections name the draw they operate on — nothing is anonymous
   S('hUpload').textContent = 'Upload dump — ' + state.draw;
