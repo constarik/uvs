@@ -1,0 +1,16 @@
+{
+  "draw": "test-draw-3",
+  "archivedAt": "2026-07-30T14:18:08.179Z",
+  "round": 30872299,
+  "targetRound": 30872299,
+  "usedFallback": false,
+  "randomness": "fbf23f6d83fd7105955447c5b9116f5c1f412077759d7c372306f27a257003f7",
+  "signature": "82ebb3c2c07e75927e7d330619bb95b611f4a264a4993b96596fc65087f2f6ae91dd5561bb53e0c57e6c7f4e6ee44e64",
+  "combinedSeed": "e379256278db8d67f2f1c98f13ea44ba89ae8ce469a13019d8d0926cfe9368b9",
+  "winner": "linkedin.com/in/sharon-whitaker-b0b6673b5",
+  "winnerTicket": "TICKET-0162",
+  "winnerScore": "fd29aa479c48f737bf60d91a374460ce8c28ff1fd6a1c3100c87e9fb4f49f8a8",
+  "successor": "linkedin.com/in/lùis-lùis-9987a22a9",
+  "successorTicket": "TICKET-0104",
+  "note": "archive only (spec §12) — the result is derivable by anyone from seal.json and the drand round"
+}
