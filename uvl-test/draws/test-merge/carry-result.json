@@ -1,0 +1,16 @@
+{
+  "draw": "test-scnd",
+  "archivedAt": "2026-07-30T08:42:13.449Z",
+  "round": 30863161,
+  "targetRound": 30863161,
+  "usedFallback": false,
+  "randomness": "3469237c9b09c478e85a26c69778179c4dae9c903ecf32c48822fb984a6c1bab",
+  "signature": "b302aa7610d5ba8b556a864aff9792c49690ca83c1b154674f126bc876251ef92174bfd2c7d6e9503fa0d5dcbadffab8",
+  "combinedSeed": "91d6d81b0fce2fd98be85f82ea5066c7175d2b6aa7c4422315839013a00ab349",
+  "winner": "linkedin.com/in/sten-bråkehielm-a66b4367",
+  "winnerTicket": "TICKET-0127",
+  "winnerScore": "fb46428ac0057fbf9e1a9ad883ad5d08eba4473b47cd00c4ce3685ae2a0ab695",
+  "successor": "linkedin.com/in/daryledwards",
+  "successorTicket": "TICKET-0150",
+  "note": "archive only (spec §12) — the result is derivable by anyone from seal.json and the drand round"
+}
