@@ -78,5 +78,5 @@
   }
 
   root.uvlDraw = { QUICKNET, sha256Str, combinedSeed, score, roundAt, timeOfRound,
-                   fetchInfo, fetchRound, fetchDeciding, permute };
+                   fetchInfo, fetchRound, fetchLatest, fetchDeciding, permute };
 })(typeof self !== 'undefined' ? self : this);
