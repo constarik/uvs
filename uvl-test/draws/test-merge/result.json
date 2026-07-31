@@ -1,0 +1,17 @@
+{
+  "draw": "test-merge",
+  "archivedAt": "2026-07-31T10:34:56.350Z",
+  "round": 30896827,
+  "targetRound": 30896827,
+  "usedFallback": false,
+  "randomness": "d7621f5d0cb0bdb6bbe43da7312196b7863c2f465734df95e43b4049a7365400",
+  "signature": "97b8bf90de6185bc05d038f39fab30ecaa1a5966a19bfe18c688c8d658be2568bf6bf1fa32b5715500206df7c2b7bbc2",
+  "combinedSeed": "eff48f9753c20bdc4bee08090bd4aa1f373a0cbd675d8a02ed974e8d657892e9",
+  "winner": "linkedin.com/in/diegoungari#1",
+  "winnerTicket": "TICKET-0133",
+  "winnerScore": "ffd48495aaf4b27cd62a916ace574f84f2fae057b5905cb6141e9ff1612ff04f",
+  "winnerPerson": "linkedin.com/in/diegoungari",
+  "successor": "linkedin.com/in/gregvoisen#2",
+  "successorTicket": "TICKET-0348",
+  "note": "archive only (spec §12) — the result is derivable by anyone from seal.json and the drand round"
+}
