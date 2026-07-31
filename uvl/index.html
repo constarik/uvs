@@ -512,7 +512,8 @@ async function demoLadder() {
   try {
     const bad = [];
     for (const l of state.chain.links) {
-      const r = await fetch(base + 'dumps/' + l.file + '?t=' + Date.now(), { cache: 'no-store' });
+      // l.file is already draw-folder-relative ("dumps/NNN-….html") — do not re-prefix
+      const r = await fetch(base + l.file + '?t=' + Date.now(), { cache: 'no-store' });
       if (!r.ok) { bad.push(l.file + ' → HTTP ' + r.status); continue; }
       const buf = await r.arrayBuffer();
       if (await uvlGh.sha256Hex(buf) !== l.sha256) bad.push(l.file + ': hash mismatch');
