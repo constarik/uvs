@@ -1,0 +1,51 @@
+{
+  "links": [
+    {
+      "n": 1,
+      "file": "dumps/001-2026-07-31T10-25-05Z.html",
+      "capturedAt": "2026-07-31T10:18:53.311Z",
+      "uploadedAt": "2026-07-31T10:25:05.436Z",
+      "sha256": "923150a1fe939bfbd9f91837b57772247582704f6eb065f4e425e5f37fb1aa39",
+      "entriesTotal": 11,
+      "tickets": [
+        {
+          "ticket": "TICKET-0001",
+          "url": "linkedin.com/in/andrewpaynesydney"
+        },
+        {
+          "ticket": "TICKET-0002",
+          "url": "linkedin.com/in/test-merge-alpha"
+        },
+        {
+          "ticket": "TICKET-0003",
+          "url": "linkedin.com/in/sten-bråkehielm-a66b4367"
+        },
+        {
+          "ticket": "TICKET-0004",
+          "url": "linkedin.com/in/syed-mujtaba-mahdi-b855a8151"
+        },
+        {
+          "ticket": "TICKET-0005",
+          "url": "linkedin.com/in/test-merge-bravo"
+        },
+        {
+          "ticket": "TICKET-0006",
+          "url": "linkedin.com/in/arezu-selyari"
+        },
+        {
+          "ticket": "TICKET-0007",
+          "url": "linkedin.com/in/nubelogica"
+        },
+        {
+          "ticket": "TICKET-0008",
+          "url": "linkedin.com/in/test-merge-charlie"
+        },
+        {
+          "ticket": "TICKET-0009",
+          "url": "linkedin.com/in/roman-michalek-56b34426a"
+        }
+      ],
+      "parserVersion": "0.4"
+    }
+  ]
+}
