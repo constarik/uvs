@@ -1,0 +1,30 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>uvLottery — manual verification</title>
+<style>
+  body { font:16px/1.55 system-ui,sans-serif; color:#222; background:#faf8f5;
+         max-width:760px; margin:0 auto; padding:20px; }
+  code, pre { font-family:ui-monospace,Consolas,monospace; background:#f3f0ea;
+              border-radius:6px; padding:2px 6px; }
+  pre { padding:10px; overflow:auto; }
+  .muted { color:#777; }
+</style></head><body>
+<h1>Verifying a draw</h1>
+<p class="muted">This page is being written (spec §17.4). What is already true and usable:</p>
+<h2>With the CLI verifier</h2>
+<p>Every draw folder is plain files in the public repository. Download the folder and
+run the verifier — the copy frozen inside the folder at seal, or the current one from
+the site root:</p>
+<pre>node uvl-verify.cjs &lt;draw folder&gt;</pre>
+<p>Exit codes: <b>0</b> everything reproduced · <b>1</b> a published claim does not
+reproduce · <b>2</b> something could not be checked (which is never reported as fine).</p>
+<p>Download over HTTPS (repository tarball or raw files) rather than <code>git clone</code> —
+Git on Windows may translate line endings on checkout, which changes bytes and fails
+honest hashes unless the repository's <code>.gitattributes</code> is respected.</p>
+<h2>Without our verifier</h2>
+<p class="muted">The full instruction — recomputing every step with nothing but a shell
+and any SHA-256 tool, per ticket policy, with a worked test vector — lands here before
+the first real draw. The derivation in one line until then: winner = highest
+<code>SHA-256(SHA-256(drawId:randomness):ticketUrl)</code> over the sealed ticket list.</p>
+<p><a href="./">← back to the draws</a></p>
+</body></html>

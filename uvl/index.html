@@ -53,7 +53,7 @@
      (Choose File, confirm) visible on sealed draws and non-draw pages since day one. */
   [hidden] { display:none !important; }
   .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin:8px 0; }
-  .ok { color:var(--revealed); } .err { color:var(--sealed); }
+  .ok { color:var(--revealed); } .err { color:var(--sealed); } .warn { color:#a07a1f; }
 </style>
 </head>
 <body>
@@ -91,6 +91,24 @@
     <div id="winnerBox"></div>
     <p class="muted">Recomputed in your browser from the sealed files and the drand round.</p>
   </section>
+<section id="secVerify" hidden>
+  <h2>Verify</h2>
+  <p class="muted">Nothing on this page asks to be believed — every claim below is
+  recomputable from the published files. Three ways, convenient → probative:</p>
+  <div class="row">
+    <button id="btnDemoVerify">run the 5-step ladder in this browser</button>
+    <span class="muted">demonstration only — a page verifying itself proves little (§17.5)</span>
+  </div>
+  <div id="demoLadder"></div>
+  <p style="margin-bottom:4px">The real check runs on <b>your</b> machine — download the
+  draw folder and the verifier, then:</p>
+  <div class="row">
+    <code id="cliLine" class="hash"></code><button id="btnCopyCli">copy</button>
+    <span id="cliCopied" class="ok" hidden>copied</span>
+  </div>
+  <p class="muted"><a href="verify.html">Manual instruction — including how to verify
+  without our verifier</a></p>
+</section>
 </main>
 <section id="secOperator" style="max-width:680px;margin:14px auto;">
   <details>
@@ -361,6 +379,7 @@ async function weightedPreviewNote(cur) {
 function renderSealed() {
   setPhase('SEALED');
   S('secPreview').hidden = false;                    // §9: SEALED shows the ticket list
+  showVerifyBlock();                                 // §17.5: three ways from SEALED on
   const s = state.seal;
   S('previewAge').innerHTML = '<b>Sealed ticket list</b> — ' + s.tickets.length
     + ' tickets, frozen at ' + s.sealedAt + '; chain link #' + s.chainLink;
@@ -420,6 +439,7 @@ async function renderRevealed(round) {
   setPhase('REVEALED');
   S('secSealed').hidden = true; S('secPreview').hidden = true;
   S('secRevealed').hidden = false;
+  showVerifyBlock();                                 // §17.5
   const s = state.seal;
   const ids = s.tickets.map(t => t.url);
   const combined = await uvlDraw.combinedSeed(s.serverSeed, round.randomness);
@@ -468,6 +488,139 @@ async function renderRevealed(round) {
            + ') — best rank ' + Math.min(...mine.map(x => x.rank)) + ' of ' + order.length);
   };
 }
+
+// ---- verify block (§17.5) — in-page DEMONSTRATION of the CLI ladder --------
+// Mirrors uvl-verify.cjs steps 1–5 with the same honesty rules: MISMATCH and
+// UNVERIFIED are never merged, the overall verdict is withheld if anything is
+// UNVERIFIED. Differences from the CLI, stated openly: runs the site's CURRENT
+// modules (not the frozen snapshots) and runs inside the page it checks.
+function showVerifyBlock() {
+  S('secVerify').hidden = false;
+  S('cliLine').textContent = 'node uvl-verify.cjs ' + state.draw;
+}
+S('btnCopyCli').onclick = async () => {
+  try { await navigator.clipboard.writeText(S('cliLine').textContent);
+        S('cliCopied').hidden = false; setTimeout(() => S('cliCopied').hidden = true, 1500);
+  } catch (e) { /* clipboard blocked — the line is selectable */ }
+};
+const hex2buf = h => Uint8Array.from(h.match(/../g), b => parseInt(b, 16)).buffer;
+async function demoLadder() {
+  const s = state.seal, base = 'draws/' + state.draw + '/', out = [];
+  const push = (n, t, st, l) => out.push({ n, t, st, l: [].concat(l) });
+  let dumpBuf = null;
+  // 1 — dump chain
+  try {
+    const bad = [];
+    for (const l of state.chain.links) {
+      const r = await fetch(base + 'dumps/' + l.file + '?t=' + Date.now(), { cache: 'no-store' });
+      if (!r.ok) { bad.push(l.file + ' → HTTP ' + r.status); continue; }
+      const buf = await r.arrayBuffer();
+      if (await uvlGh.sha256Hex(buf) !== l.sha256) bad.push(l.file + ': hash mismatch');
+      if (l.n === s.chainLink) dumpBuf = buf;
+    }
+    if (!dumpBuf) bad.push('sealed link #' + s.chainLink + ' not found in the chain');
+    else if (state.chain.links[state.chain.links.length - 1].n !== s.chainLink)
+      bad.push('sealed link is not the last one');
+    push(1, 'dump chain', bad.length ? 'MISMATCH' : 'OK',
+      bad.length ? bad : state.chain.links.length + ' link(s), every file matches its recorded hash');
+  } catch (e) { push(1, 'dump chain', 'UNVERIFIED', e.message); }
+  // 2 — ticket list
+  try {
+    if (!dumpBuf) throw new Error('no dump to rebuild from');
+    const prof = s.profile || drawProfile();
+    const built = uvlParser.buildTickets(new TextDecoder().decode(dumpBuf),
+      { exclude: prof.excludes, policy: prof.tickets.policy });
+    let mine = built.tickets, note = null;
+    if (prof.tickets.policy === 'weighted') {
+      const ctR = await fetch(base + (s.carryTicketsFile || 'carry-tickets.json'), { cache: 'no-store' });
+      const crR = await fetch(base + (s.carryResultFile || 'carry-result.json'), { cache: 'no-store' });
+      if (!ctR.ok || !crR.ok) throw new Error('carry files unreachable');
+      const ctT = await ctR.text(), crT = await crR.text();
+      const bad2 = [];
+      if (await uvlGh.sha256Hex(new TextEncoder().encode(ctT).buffer) !== s.carryTicketsSha256)
+        bad2.push('carry-tickets.json hash != sealed');
+      if (await uvlGh.sha256Hex(new TextEncoder().encode(crT).buffer) !== s.carryResultSha256)
+        bad2.push('carry-result.json hash != sealed');
+      if (bad2.length) { push(2, 'ticket list', 'MISMATCH', bad2); throw 'reported'; }
+      const cr = JSON.parse(crT);
+      const ex = uvlMerge.expandWeighted(mine, {
+        tickets: JSON.parse(ctT).tickets || [],
+        winnerUrl: String(cr.winnerPerson || cr.winner || '').split('#')[0],
+        weights: (prof.carryOver || {}).weights });
+      mine = ex.tickets;
+      note = ex.persons + ' persons (' + ex.carried + ' carried) → ' + mine.length + ' tickets';
+    }
+    const bad = [];
+    if (mine.length !== s.tickets.length)
+      bad.push('recomputed ' + mine.length + ', sealed ' + s.tickets.length);
+    for (let i = 0; i < Math.min(mine.length, s.tickets.length); i++)
+      if (mine[i].url !== s.tickets[i].url || mine[i].ticket !== s.tickets[i].ticket) {
+        bad.push('first divergence at position ' + (i + 1)); break;
+      }
+    push(2, 'ticket list', bad.length ? 'MISMATCH' : 'OK', bad.length ? bad :
+      [s.tickets.length + ' tickets reproduced in identical order (current site modules — '
+       + 'the CLI uses the frozen snapshots)'].concat(note ? [note] : []));
+  } catch (e) { if (e !== 'reported') push(2, 'ticket list', 'UNVERIFIED', e.message || String(e)); }
+  // 3 — seal precedes round
+  try {
+    const d = s.drand, tMs = (d.genesisTime + (s.targetRound - 1) * d.period) * 1000;
+    const gap = (tMs - Date.parse(s.sealedAt)) / 60000;
+    push(3, 'seal precedes round', gap > 0 ? 'OK' : 'MISMATCH',
+      gap > 0 ? 'sealed ' + gap.toFixed(1) + ' min before the round — outcome unknowable at seal'
+              : 'round time was ALREADY PAST at seal');
+  } catch (e) { push(3, 'seal precedes round', 'UNVERIFIED', e.message); }
+  // 4 — drand round
+  let round = null;
+  try {
+    round = await uvlDraw.fetchDeciding(s.targetRound);
+    if (!round) push(4, 'drand round', 'UNVERIFIED', 'round ' + s.targetRound + ' not published yet');
+    else {
+      const sigOk = round.signature
+        ? (await uvlGh.sha256Hex(hex2buf(round.signature)) === round.randomness) : null;
+      push(4, 'drand round', sigOk === false ? 'MISMATCH' : 'OK',
+        ['round ' + round.round + (round.round !== s.targetRound ? ' (fallback ≥ target, §7.1)' : ''),
+         sigOk === null ? 'no signature available to check'
+                        : 'randomness = SHA-256(signature) ' + (sigOk ? '✓' : '✗')]);
+      if (sigOk === false) round = null;
+    }
+  } catch (e) { push(4, 'drand round', 'UNVERIFIED', e.message); }
+  // 5 — winner derivation
+  try {
+    if (!round) throw new Error('no round to derive from');
+    const combined = await uvlDraw.combinedSeed(s.serverSeed, round.randomness);
+    const order = await uvlDraw.permute(s.tickets.map(t => t.url), combined);
+    const win = order[0], succ = uvlMerge.successorOf(order.slice(1), win.id);
+    const byUrl = {}; s.tickets.forEach(t => byUrl[t.url] = t.ticket);
+    const derived = ['rank 1: ' + byUrl[win.id] + ' ' + win.id,
+                     'rank 2: ' + (succ ? byUrl[succ.id] + ' ' + succ.id : '—') + ' (succession)'];
+    if (!state.result)
+      push(5, 'winner derivation', 'UNVERIFIED',
+        ['nothing published to compare against (no result.json yet)'].concat(derived));
+    else {
+      const bad = [];
+      if (state.result.winner !== win.id) bad.push('published winner ' + state.result.winner + ' ≠ derived');
+      if (state.result.combinedSeed && state.result.combinedSeed !== combined) bad.push('combinedSeed differs');
+      push(5, 'winner derivation', bad.length ? 'MISMATCH' : 'OK',
+        bad.length ? bad : derived.concat('matches the published result.json'));
+    }
+  } catch (e) { push(5, 'winner derivation', 'UNVERIFIED', e.message); }
+  return out;
+}
+S('btnDemoVerify').onclick = async () => {
+  if (!state.seal) return;
+  S('demoLadder').innerHTML = '<span class="muted">running…</span>';
+  const steps = await demoLadder();
+  const cls = { OK: 'ok', MISMATCH: 'err', UNVERIFIED: 'warn' };
+  const verdict = steps.some(x => x.st === 'MISMATCH')
+    ? '<span class="err"><b>MISMATCH</b> — something published does not reproduce</span>'
+    : steps.some(x => x.st === 'UNVERIFIED')
+      ? '<span class="warn"><b>NO VERDICT</b> — nothing contradicted, but "could not check" is not "checked"</span>'
+      : '<span class="ok"><b>all 5 reproduced in this browser</b> — a demonstration; the CLI on your machine is the real check</span>';
+  S('demoLadder').innerHTML = steps.map(x =>
+    '<div style="margin:6px 0"><span class="' + cls[x.st] + '"><b>[' + x.st + ']</b></span> '
+    + x.n + '. ' + x.t + x.l.map(l => '<div class="muted" style="margin-left:18px">' + l + '</div>').join('')
+  ).join('') + '<div style="margin-top:8px">' + verdict + '</div>';
+};
 
 // ---- operator: token -------------------------------------------------------
 let PAT = null;                                   // tab memory only (§11.1)
