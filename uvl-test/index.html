@@ -508,22 +508,26 @@ async function demoLadder() {
   const s = state.seal, base = 'draws/' + state.draw + '/', out = [];
   const push = (n, t, st, l) => out.push({ n, t, st, l: [].concat(l) });
   let dumpBuf = null;
-  // 1 — dump chain
+  // 1 — dump chain. MISMATCH is reserved for bytes that disagree; a fetch that
+  // does not arrive is UNVERIFIED — "couldn't download" is not "doesn't reproduce".
   try {
-    const bad = [];
+    const bad = [], unreach = [];
     for (const l of state.chain.links) {
       // l.file is already draw-folder-relative ("dumps/NNN-….html") — do not re-prefix
       const r = await fetch(base + l.file + '?t=' + Date.now(), { cache: 'no-store' });
-      if (!r.ok) { bad.push(l.file + ' → HTTP ' + r.status); continue; }
+      if (!r.ok) { unreach.push(l.file + ' → HTTP ' + r.status); continue; }
       const buf = await r.arrayBuffer();
       if (await uvlGh.sha256Hex(buf) !== l.sha256) bad.push(l.file + ': hash mismatch');
       if (l.n === s.chainLink) dumpBuf = buf;
     }
-    if (!dumpBuf) bad.push('sealed link #' + s.chainLink + ' not found in the chain');
-    else if (state.chain.links[state.chain.links.length - 1].n !== s.chainLink)
+    if (!bad.length && !dumpBuf && !unreach.length)
+      bad.push('sealed link #' + s.chainLink + ' not found in the chain');
+    else if (dumpBuf && state.chain.links[state.chain.links.length - 1].n !== s.chainLink)
       bad.push('sealed link is not the last one');
-    push(1, 'dump chain', bad.length ? 'MISMATCH' : 'OK',
-      bad.length ? bad : state.chain.links.length + ' link(s), every file matches its recorded hash');
+    push(1, 'dump chain', bad.length ? 'MISMATCH' : unreach.length ? 'UNVERIFIED' : 'OK',
+      bad.length ? bad.concat(unreach)
+      : unreach.length ? unreach.concat('could not download — nothing checked, nothing contradicted')
+      : state.chain.links.length + ' link(s), every file matches its recorded hash');
   } catch (e) { push(1, 'dump chain', 'UNVERIFIED', e.message); }
   // 2 — ticket list
   try {
