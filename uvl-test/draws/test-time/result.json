@@ -1,0 +1,16 @@
+{
+  "draw": "test-time",
+  "archivedAt": "2026-07-31T07:07:51.542Z",
+  "round": 30892531,
+  "targetRound": 30892531,
+  "usedFallback": false,
+  "randomness": "79cd416a1cc86087abbd1ffd3576417e0eb69eb75d8a0f51f3205a0c88ceb349",
+  "signature": "8aa1c056a81364795b9288218f5c0f42fc1ae6570838cfadbc0ab26fa6fd0e42d6bf91e862f6f7108353a05b07d3850e",
+  "combinedSeed": "6626dcd19cdf8457551d229424c92a50c32d26dea91833dea279e6b95e31cc0b",
+  "winner": "linkedin.com/in/nicoleta-o-t-453190223",
+  "winnerTicket": "TICKET-0009",
+  "winnerScore": "fc3c8adedbcab6f9a617b4572b32cfe688aa43f28e715a114605ff4ed8d17664",
+  "successor": "linkedin.com/in/snitram",
+  "successorTicket": "TICKET-0186",
+  "note": "archive only (spec §12) — the result is derivable by anyone from seal.json and the drand round"
+}
