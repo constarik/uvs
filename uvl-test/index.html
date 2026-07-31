@@ -31,8 +31,9 @@
   .stale { color:var(--sealed); font-weight:600; }
   #tickets { display:grid; grid-template-columns:repeat(auto-fill,minmax(230px,1fr)); gap:6px; margin-top:8px; }
   .tk { font-family:var(--mono); font-size:12.5px; padding:6px 8px; background:#f7f5f0; border-radius:6px;
-        overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        overflow-wrap:anywhere; word-break:break-word; }   /* v0.4.17: wrap, never truncate — the slug IS the ticket */
   .tk b { color:var(--open); }
+  #winnerBox, #lookupOut { overflow-wrap:anywhere; word-break:break-word; }
   #countdown { font-family:var(--mono); font-size:34px; text-align:center; letter-spacing:2px; margin:8px 0; }
   .seal-wax { text-align:center; font-size:40px; }
   button { font:inherit; padding:8px 14px; border-radius:8px; border:1px solid var(--line);
@@ -99,6 +100,7 @@
     <div class="row">
       <button id="btnCheckTok">check token</button><span id="tokStatus" class="muted"></span>
     </div>
+    <div id="opsClosedNote" hidden class="muted" style="margin-top:8px"></div>
     <hr id="opsInitHr" style="border:none;border-top:1px solid var(--line)">
     <div id="opsInit">
     <h2>Init draw</h2>
@@ -279,6 +281,15 @@ function render() {
   S('hUpload').textContent = 'Upload dump — ' + state.draw;
   S('hSeal').textContent = 'Seal — ' + state.draw;
   S('secMeta').hidden = false;
+  // v0.4.17 — a sealed draw's console has nothing to offer: seal is single-use and the
+  // spec closes the preview once SEALED, so a visible file input was a lie. One note
+  // instead of dead controls (same rule as the archived-view buttons in 0.4.9).
+  if (state.seal) {
+    hideOpsNeedingDraw();
+    S('opsClosedNote').hidden = false;
+    S('opsClosedNote').textContent = 'this draw is sealed — upload and seal are closed '
+      + '(append-only, §11.3); the console can only create new draws from ?new=1';
+  }
   S('metaPrize').textContent = m.prize ? ('Prize: ' + m.prize) : '';
   S('metaLinks').innerHTML = m.links && m.links.post
     ? 'Enter by commenting on <a href="'+m.links.post+'">the LinkedIn post</a>.' : '';
