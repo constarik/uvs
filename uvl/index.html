@@ -614,10 +614,20 @@ S('btnPreflight').onclick = async () => {
     const period = info.period, genesis = info.genesis_time;
     const gapSec = Math.round(parseFloat(S('gapMin').value) * 60);
     if (!(gapSec > 0)) throw new Error('gap must be positive');
-    const nowSec = Math.floor(Date.now() / 1000);
-    const targetRound = Math.floor((nowSec + gapSec - genesis) / period) + 2;
+    // v0.4.15 — the beacon is the clock, not this machine. The target round used to be
+    // computed from Date.now(): a fast local clock would pick a round that drand has
+    // ALREADY published, making the outcome knowable at seal time — and nothing in the
+    // sealed artifacts would reveal it afterwards, because sealedAt comes from the same
+    // wrong clock. Anchoring on the latest published round removes the operator's
+    // machine from the trust chain entirely.
+    const latest = await uvlDraw.fetchLatest();
+    const drandNowSec = genesis + (latest.round - 1) * period;
+    const skewSec = Math.round(Date.now() / 1000 - drandNowSec);
+    const targetRound = latest.round + Math.ceil(gapSec / period) + 1;
+    if (targetRound <= latest.round) throw new Error('target round is not in the future — refusing');
     const targetTime = new Date((genesis + (targetRound - 1) * period) * 1000).toISOString();
     preflight = { cur, targetRound, targetTime, period, genesis,
+                  anchorRound: latest.round, skewSec: skewSec,
                   prizeSha: S('prizeSha').value.trim() || null };
     S('preflightBox').hidden = false;
     S('preflightBox').innerHTML =
@@ -625,6 +635,12 @@ S('btnPreflight').onclick = async () => {
       + 'draw: <span class="hash">' + state.draw + '</span> (root ' + DATA_ROOT + ')<br>'
       + 'chain link #' + cur.n + ' · ' + cur.tickets.length + ' tickets · dump <span class="hash">'
       + cur.sha256.slice(0,16) + '…</span><br>'
+      + 'beacon is now at round <b>#' + latest.round + '</b> — the target is counted from there, '
+      + 'not from this machine\'s clock<br>'
+      + (Math.abs(skewSec) > 60
+          ? '<span class="err">local clock differs from the beacon by ' + skewSec
+            + ' s — harmless for the seal, but fix it before trusting any time shown here</span><br>'
+          : 'local clock agrees with the beacon (' + skewSec + ' s)<br>')
       + 'target round <b>#' + targetRound + '</b> expected <b>' + targetTime + '</b> (gap '
       + (gapSec/60) + ' min)<br>'
       + 'fallback: first available round ≥ target (§7.1)<br>'
@@ -677,6 +693,7 @@ S('btnSeal').onclick = async () => {
       drand: { beacon: 'quicknet', chainHash: uvlDraw.QUICKNET.chainHash,
                period: preflight.period, genesisTime: preflight.genesis },
       targetRound: preflight.targetRound, targetRoundTimeUtc: preflight.targetTime,
+      sealedAtRound: preflight.anchorRound,   // beacon position when the target was chosen (v0.4.15)
       fallbackRule: 'the outcome is decided by the first available round with number >= target (§7.1)',
       tickets: cur.tickets };
     if (verifyNote) seal.verifierNote = verifyNote;
