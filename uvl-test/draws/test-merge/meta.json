@@ -1,0 +1,29 @@
+{
+  "id": "test-merge",
+  "title": "weighted merge test",
+  "summary": "",
+  "prize": "",
+  "links": {},
+  "profile": {
+    "extract": {
+      "class": "linkedin-spa",
+      "extends": "uvl-collect-base",
+      "version": "0.4"
+    },
+    "tickets": {
+      "policy": "weighted"
+    },
+    "excludes": [
+      "linkedin.com/in/constantinerazinsky"
+    ],
+    "carryOver": {
+      "root": "uvl-test",
+      "draw": "test-scnd",
+      "weights": {
+        "winner": 3,
+        "participant": 2,
+        "mainOnly": 1
+      }
+    }
+  }
+}

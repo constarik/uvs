@@ -5,6 +5,7 @@
     "test-scnd",
     "test-draw-3",
     "test-time",
-    "test-weighted"
+    "test-weighted",
+    "test-merge"
   ]
 }
