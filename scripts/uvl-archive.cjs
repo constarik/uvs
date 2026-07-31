@@ -29,6 +29,10 @@ async function processDraw(dir) {
   const combined = await D.combinedSeed(seal.serverSeed, round.randomness);
   const order = await D.permute(ids, combined);
   const byUrl = {}; seal.tickets.forEach(t => byUrl[t.url] = t.ticket);
+  // v0.2: succession skips the winner's own replicas (weighted draws, §16.4);
+  // for plain draws person(id) === id and this is exactly order[1].
+  const person = id => String(id).split('#')[0];
+  const succ = order.find(o => person(o.id) !== person(order[0].id)) || null;
   const result = {
     draw: seal.id, archivedAt: new Date().toISOString(),
     round: round.round, targetRound: seal.targetRound,
@@ -36,8 +40,9 @@ async function processDraw(dir) {
     randomness: round.randomness, signature: round.signature || null,
     combinedSeed: combined,
     winner: order[0].id, winnerTicket: byUrl[order[0].id], winnerScore: order[0].score,
-    successor: order[1] ? order[1].id : null,
-    successorTicket: order[1] ? byUrl[order[1].id] : null,
+    winnerPerson: person(order[0].id),
+    successor: succ ? succ.id : null,
+    successorTicket: succ ? byUrl[succ.id] : null,
     note: 'archive only (spec §12) — the result is derivable by anyone from seal.json and the drand round'
   };
   fs.writeFileSync(resultPath, JSON.stringify(result, null, 2) + '\n');
