@@ -48,6 +48,10 @@
   details > summary { cursor:pointer; font-weight:600; }
   footer { text-align:center; color:#999; font-size:13px; padding:24px 0; }
   footer a { color:inherit; }
+  /* v0.5.1: the hidden attribute must ALWAYS win — author rules like .row{display:flex}
+     silently override the UA's [hidden]{display:none}, which kept "hidden" button rows
+     (Choose File, confirm) visible on sealed draws and non-draw pages since day one. */
+  [hidden] { display:none !important; }
   .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin:8px 0; }
   .ok { color:var(--revealed); } .err { color:var(--sealed); }
 </style>
