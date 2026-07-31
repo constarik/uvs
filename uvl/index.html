@@ -169,6 +169,9 @@
       <label class="muted">prize link SHA-256 (optional):</label>
     </div>
     <div class="row"><input type="text" id="prizeSha" placeholder="empty for rehearsal draws"></div>
+    <p class="muted" style="margin:6px 0 2px">Carry-rule commitment SHA-256 (§16.4) — for the
+    rehearsal seal of a planned weighted pair; the rule text is revealed with the main post:</p>
+    <div class="row"><input type="text" id="ruleSha" placeholder="optional: 64 hex chars"></div>
     <div class="row"><button id="btnPreflight">preflight</button></div>
     <div id="preflightBox" hidden style="background:#f7f5f0;border-radius:8px;padding:10px"></div>
     <div class="row" id="sealConfirmRow" hidden>
@@ -959,6 +962,14 @@ S('btnSeal').onclick = async () => {
       fallbackRule: 'the outcome is decided by the first available round with number >= target (§7.1)',
       tickets: sealTickets };
     if (verifyNote) seal.verifierNote = verifyNote;
+    // §16.4 — carry-rule commitment: the salted rule file's hash, entered at the
+    // REHEARSAL seal; the file itself is revealed with the main post
+    const ruleSha = S('ruleSha').value.trim().toLowerCase();
+    if (ruleSha) {
+      if (!/^[0-9a-f]{64}$/.test(ruleSha))
+        throw new Error('rule commitment must be 64 hex chars (SHA-256), got ' + ruleSha.length);
+      seal.ruleCommitSha256 = ruleSha;
+    }
     if (weighted) {
       seal.carryTicketsFile = 'carry-tickets.json'; seal.carryTicketsSha256 = weighted.carryTicketsSha;
       seal.carryResultFile  = 'carry-result.json';  seal.carryResultSha256  = weighted.carryResultSha;
