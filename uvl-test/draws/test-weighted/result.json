@@ -1,0 +1,17 @@
+{
+  "draw": "test-weighted",
+  "archivedAt": "2026-07-31T08:37:40.534Z",
+  "round": 30894423,
+  "targetRound": 30894423,
+  "usedFallback": false,
+  "randomness": "c998b990f8b041a405cdad404ffafd2e7b494db7b9a8b4107684ead69fc6093c",
+  "signature": "896eeb3fec7065e5b609116615003d0aba4207e428bf20e46378492fbc991c2f6a7256f007c9318021d71a0d4e137c27",
+  "combinedSeed": "2f137ff6581ac42814001636cdf390d862ea575b946c8f779600807c6de9dc98",
+  "winner": "linkedin.com/in/amina-šljivo-bećić-3a05a79b#1",
+  "winnerTicket": "TICKET-0175",
+  "winnerScore": "ffc77c2205e2a876a23cc606938a60203cc042b3a7c5203b45830754bd1ed1e3",
+  "winnerPerson": "linkedin.com/in/amina-šljivo-bećić-3a05a79b",
+  "successor": "linkedin.com/in/wayneholleyperetired#1",
+  "successorTicket": "TICKET-0119",
+  "note": "archive only (spec §12) — the result is derivable by anyone from seal.json and the drand round"
+}
