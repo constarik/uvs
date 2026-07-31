@@ -18,7 +18,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 
-const VERSION = '0.1';
+const VERSION = '0.2';   // v0.2: weighted draws — frozen merge module + carry files (§16.4)
 const OK = 'OK', MISMATCH = 'MISMATCH', UNVERIFIED = 'UNVERIFIED';
 
 const sha256 = buf => crypto.createHash('sha256').update(buf).digest('hex');
@@ -97,7 +97,42 @@ function stepTickets(dir, seal) {
       'this parser cannot run policy "' + policy + '": ' + e.message);
   }
 
-  const mine = built.tickets, theirs = seal.tickets || [];
+  const mine0 = built.tickets, theirs = seal.tickets || [];
+  let mine = mine0, weightNote = null;
+  if (policy === 'weighted') {
+    // §16.4 — the expansion is trust-chain code: everything it feeds on is frozen
+    // in this folder and hash-committed in seal.json. Any divergence is MISMATCH,
+    // not noise (contrast with the verifier's own snapshot, §17.3).
+    const frozen = (name, file, sealedSha, required) => {
+      const p = path.join(dir, file);
+      if (!fs.existsSync(p)) return { err: [required ? MISMATCH : UNVERIFIED, name + ' missing: ' + file] };
+      const h = sha256(fs.readFileSync(p));
+      if (sealedSha && h !== sealedSha)
+        return { err: [MISMATCH, name + ' sha256 ' + h + ' != sealed ' + sealedSha] };
+      return { path: p };
+    };
+    const mf = frozen('merge snapshot', seal.mergeSnapshotFile || 'uvl-merge-snapshot.js', seal.mergeSha256, true);
+    if (mf.err) return report(2, 'ticket list', mf.err[0], mf.err[1]);
+    const ct = frozen('carry tickets', seal.carryTicketsFile || 'carry-tickets.json', seal.carryTicketsSha256, true);
+    if (ct.err) return report(2, 'ticket list', ct.err[0], ct.err[1]);
+    const cr = frozen('carry result', seal.carryResultFile || 'carry-result.json', seal.carryResultSha256, true);
+    if (cr.err) return report(2, 'ticket list', cr.err[0], cr.err[1]);
+    let merge;
+    try { merge = require(path.resolve(mf.path)); }
+    catch (e) { return report(2, 'ticket list', UNVERIFIED, 'merge snapshot will not load: ' + e.message); }
+    const carryT = readJson(ct.path), carryR = readJson(cr.path);
+    const co = (seal.profile && seal.profile.carryOver) || {};
+    const winnerUrl = String(carryR.winnerPerson || carryR.winner || '').split('#')[0] || null;
+    try {
+      const ex = merge.expandWeighted(mine0, {
+        tickets: carryT.tickets || carryT, winnerUrl: winnerUrl, weights: co.weights });
+      mine = ex.tickets;
+      weightNote = ex.persons + ' persons (' + ex.carried + ' carried) -> ' + mine.length
+        + ' tickets, merge v' + (merge.VERSION || '?');
+    } catch (e) {
+      return report(2, 'ticket list', UNVERIFIED, 'weighted expansion failed: ' + e.message);
+    }
+  }
   const bad = [];
   if (mine.length !== theirs.length)
     bad.push('recomputed ' + mine.length + ' tickets, sealed list has ' + theirs.length);
@@ -120,7 +155,7 @@ function stepTickets(dir, seal) {
     mine.length + ' tickets reproduced from ' + built.entriesTotal + ' entries, order identical',
     'parser ' + (built.class ? built.class.name + ' v' + built.version : 'v' + built.version) +
       ', policy ' + policy + ', excludes ' + ((profile.excludes || []).length)
-  ]);
+  ].concat(weightNote ? [weightNote] : []));
 }
 
 // ── step 3 ── the seal precedes the round (§7–§8). Pure arithmetic on the
@@ -221,7 +256,9 @@ function stepDerive(seal, round, result) {
   const scored = ids.map(id => ({ id, score: sha256str(combined + ':' + id) }));
   scored.sort((a, b) => a.score > b.score ? -1 : a.score < b.score ? 1 :
                         a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
-  const win = scored[0], next = scored.find(s => s.id !== win.id);
+  const personOf = id => String(id).split('#')[0];
+  // succession skips the winner's own replicas (§16.4); for plain draws this is rank 2
+  const win = scored[0], next = scored.find(s => personOf(s.id) !== personOf(win.id));
 
   const derived = [
     'combinedSeed ' + combined,

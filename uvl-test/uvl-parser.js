@@ -10,7 +10,10 @@
   else root.uvlParser = factory();
 })(typeof self !== 'undefined' ? self : this, function () {
   'use strict';
-  const VERSION = '0.3';
+  const VERSION = '0.4';
+  // v0.4: policy 'weighted' accepted — extraction is identical to one-per-person
+  // (persons, dump order, dedupe); the replica expansion is uvl-merge's job and
+  // happens strictly after extraction, per the base-class pipeline below.
   // v0.3: the parser declares itself as a collection class (draw profiles).
   // Base class = source-independent uvLs semantics: document order -> normalize ->
   // ticket policy -> numbering -> excludes. This module implements the extractor
@@ -62,7 +65,7 @@
   // in the same slot without touching extraction.
   function buildTickets(html, opts) {
     const policy = (opts && opts.policy) || 'one-per-person';
-    if (policy !== 'one-per-person')
+    if (policy !== 'one-per-person' && policy !== 'weighted')
       throw new Error('ticket policy "' + policy + '" not implemented by ' + CLASS.name + ' v' + VERSION);
     const exclude = new Set(((opts && opts.exclude) || []).map(normalizeUrl).filter(Boolean));
     const entries = parseDump(html);

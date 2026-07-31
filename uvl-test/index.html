@@ -118,6 +118,10 @@
     <p class="muted" style="margin:2px 0 6px">Id is technical identity (never reused;
     taken ids get a suffix suggested automatically). Title is just the page heading.</p>
     <div class="row">
+      <label for="carryFrom" style="min-width:60px"><b>Carry</b></label>
+      <input type="text" id="carryFrom" placeholder="optional — weighted draw (§16.4): carry over from a finished draw, id or root/id" style="flex:1">
+    </div>
+    <div class="row">
       <button id="btnInitDraw" class="primary">init draw</button>
       <span id="initStatus" class="muted"></span>
     </div>
@@ -157,6 +161,7 @@
   <span id="buildVer" class="hash"></span>
 </footer>
 <script src="uvl-parser.js"></script>
+<script src="uvl-merge.js"></script>
 <script src="uvl-gh.js"></script>
 <script src="uvl-draw.js"></script>
 <script>
@@ -319,6 +324,33 @@ function renderOpen() {
     + (stale ? ' · <span class="stale">stale — a fresher capture is overdue</span>' : '');
   S('tickets').innerHTML = (cur.tickets || [])
     .map(t => '<div class="tk"><b>' + t.ticket + '</b> ' + t.url + '</div>').join('');
+  weightedPreviewNote(cur);
+}
+// v0.5 — a weighted draw's preview shows what the list will EXPAND to (§16.4).
+// Non-binding like the preview itself; the seal recomputes from frozen inputs.
+async function weightedPreviewNote(cur) {
+  const prof = drawProfile();
+  if (prof.tickets.policy !== 'weighted' || !prof.carryOver) return;
+  const co = prof.carryOver;
+  try {
+    const cbase = '../' + co.root + '/draws/' + co.draw + '/';
+    const ct = await j(cbase + 'tickets.json');
+    const cr = await j(cbase + 'result.json');
+    if (!cr) {
+      S('previewAge').innerHTML += '<br><span class="stale">weighted (§16.4): carry draw '
+        + co.draw + ' has no result yet — seal will refuse until it does</span>';
+      return;
+    }
+    const winnerUrl = String(cr.winnerPerson || cr.winner || '').split('#')[0];
+    const ex = uvlMerge.expandWeighted(cur.tickets || [],
+      { tickets: (ct && ct.tickets) || [], winnerUrl: winnerUrl, weights: co.weights });
+    S('previewAge').innerHTML += '<br>weighted (§16.4): ' + ex.persons + ' persons ('
+      + ex.carried + ' carried from ' + co.draw + ', winner ×' + co.weights.winner
+      + ') → <b>' + ex.tickets.length + ' tickets</b>';
+  } catch (e) {
+    S('previewAge').innerHTML += '<br><span class="err">weighted preview failed: '
+      + e.message + '</span>';
+  }
 }
 
 // ---- SEALED ----------------------------------------------------------------
@@ -389,7 +421,8 @@ async function renderRevealed(round) {
   const combined = await uvlDraw.combinedSeed(s.serverSeed, round.randomness);
   const order = await uvlDraw.permute(ids, combined);
   const byUrl = {}; s.tickets.forEach(t => byUrl[t.url] = t.ticket);
-  const win = order[0], succ = order[1];
+  // v0.5: succession skips the winner's own replicas (§16.4); plain draws = rank 2
+  const win = order[0], succ = uvlMerge.successorOf(order.slice(1), win.id);
   // §12: live derivation and the Actions archive must agree — a mismatch is surfaced
   const arch = state.result;
   const mismatch = arch && arch.winner && arch.winner !== win.id;
@@ -421,9 +454,14 @@ async function renderRevealed(round) {
     const u = uvlParser.normalizeUrl(raw)
            || (/^[^\s\/]+$/.test(raw) ? uvlParser.normalizeUrl('linkedin.com/in/' + raw) : null);
     if (!u) { S('lookupOut').textContent = 'not a valid profile URL or slug'; return; }
-    const rank = order.findIndex(o => o.id === u);
-    S('lookupOut').textContent = rank === -1 ? u + ' — not in this draw'
-      : (byUrl[u] + ' — rank ' + (rank + 1) + ' of ' + order.length);
+    // v0.5: a person may hold several replica tickets (url#k) — report them all
+    const mine = order.map((o, i) => ({ o, rank: i + 1 }))
+                      .filter(x => uvlMerge.person(x.o.id) === u);
+    S('lookupOut').textContent = !mine.length ? u + ' — not in this draw'
+      : mine.length === 1
+        ? (byUrl[mine[0].o.id] + ' — rank ' + mine[0].rank + ' of ' + order.length)
+        : (mine.length + ' tickets (' + mine.map(x => byUrl[x.o.id]).join(', ')
+           + ') — best rank ' + Math.min(...mine.map(x => x.rank)) + ' of ' + order.length);
   };
 }
 
@@ -482,13 +520,30 @@ S('btnInitDraw').onclick = async () => {
     }
     // registry is append-only: read the CURRENT list from the repo, append, write back
     S('initStatus').textContent = 'committing…';
+    // v0.5 — optional carry-over makes this a weighted draw (§16.4). The source
+    // must already be SEALED (its tickets.json is what gets carried); its result
+    // may arrive later — only the SEAL of this draw requires it.
+    const carryRaw = S('carryFrom').value.trim();
+    let ticketsProf = { policy: 'one-per-person' }, carryOver = null;
+    if (carryRaw) {
+      const parts = carryRaw.includes('/') ? carryRaw.split('/') : [DATA_ROOT, carryRaw];
+      if (parts.length !== 2 || !parts[0] || !parts[1])
+        throw new Error('"' + carryRaw + '" — carry is an id or root/id, e.g. uvl-test/test-scnd');
+      const cProbe = await fetch('../' + parts[0] + '/draws/' + parts[1] + '/tickets.json?t='
+        + Date.now(), { cache: 'no-store' });
+      if (!cProbe.ok) throw new Error('carry draw "' + carryRaw
+        + '" has no sealed tickets.json (HTTP ' + cProbe.status + ') — seal it first');
+      ticketsProf = { policy: 'weighted' };
+      carryOver = { root: parts[0], draw: parts[1],
+                    weights: { winner: 3, participant: 2, mainOnly: 1 } };
+    }
     const meta = { id: id, title: title, summary: '', prize: '', links: {},
       profile: {                                        // draw profile (frozen at seal)
         extract: { class: uvlParser.CLASS.name, extends: uvlParser.CLASS.extends,
                    version: uvlParser.CLASS.version },
-        tickets: { policy: 'one-per-person' },
-        excludes: [ORGANIZER]
-      } };
+        tickets: ticketsProf,
+        excludes: [ORGANIZER] } };
+    if (carryOver) meta.profile.carryOver = carryOver;
     const regProbe = await fetch(REPO_API + '/contents/' + DATA_ROOT + '/draws/index.json?ref=master',
       { headers: { Authorization: 'Bearer ' + PAT, Accept: 'application/vnd.github+json' }, cache: 'no-store' });
     let regIds = [];
@@ -519,7 +574,8 @@ function drawProfile() {
   const p = (state.meta && state.meta.profile) || {};
   return { extract: p.extract || { class: 'linkedin-spa' },
            tickets: p.tickets || { policy: 'one-per-person' },
-           excludes: p.excludes || [ORGANIZER] };
+           excludes: p.excludes || [ORGANIZER],
+           carryOver: p.carryOver || null };             // v0.5: weighted draws (§16.4)
 }
 S('dumpFile').onchange = async (ev) => {
   const f = ev.target.files[0]; if (!f) return;
@@ -689,8 +745,41 @@ S('btnSeal').onclick = async () => {
       verifySrc = null; verifyVersion = null;
       verifyNote = 'verifier snapshot unavailable at seal time: ' + e.message;
     }
+    // v0.5 — weighted draws (§16.4): the expansion is TRUST-CHAIN code, so everything
+    // it feeds on is frozen into the draw folder with hashes in seal.json: the merge
+    // module snapshot, the carry draw's sealed ticket list, and its result. Unlike the
+    // verifier snapshot, ANY failure here aborts the seal — the list would be wrong.
+    const prof = drawProfile();
+    let sealTickets = cur.tickets, weighted = null;
+    if (prof.tickets.policy === 'weighted') {
+      if (!prof.carryOver) throw new Error('weighted policy but no carryOver in the profile');
+      const co = prof.carryOver;
+      const cbase = '../' + co.root + '/draws/' + co.draw + '/';
+      const ctR = await fetch(cbase + 'tickets.json?t=' + Date.now(), { cache: 'no-store' });
+      if (!ctR.ok) throw new Error('carry draw ' + co.draw + ': tickets.json -> HTTP ' + ctR.status);
+      const carryTicketsText = await ctR.text();
+      const crR = await fetch(cbase + 'result.json?t=' + Date.now(), { cache: 'no-store' });
+      if (!crR.ok) throw new Error('carry draw ' + co.draw + ' has no result.json yet — '
+        + 'the winner category is undefined, refusing to seal');
+      const carryResultText = await crR.text();
+      const carryT = JSON.parse(carryTicketsText), carryR = JSON.parse(carryResultText);
+      const mR = await fetch('uvl-merge.js?t=' + Date.now(), { cache: 'no-store' });
+      if (!mR.ok) throw new Error('uvl-merge.js -> HTTP ' + mR.status);
+      const mergeSrc = await mR.text();
+      const winnerUrl = String(carryR.winnerPerson || carryR.winner || '').split('#')[0];
+      const ex = uvlMerge.expandWeighted(cur.tickets,
+        { tickets: carryT.tickets || [], winnerUrl: winnerUrl, weights: co.weights });
+      sealTickets = ex.tickets;
+      weighted = {
+        carryTicketsText, carryResultText, mergeSrc,
+        carryTicketsSha: await uvlGh.sha256Hex(new TextEncoder().encode(carryTicketsText).buffer),
+        carryResultSha:  await uvlGh.sha256Hex(new TextEncoder().encode(carryResultText).buffer),
+        mergeSha:        await uvlGh.sha256Hex(new TextEncoder().encode(mergeSrc).buffer),
+        persons: ex.persons, carried: ex.carried
+      };
+    }
     const ticketsText = JSON.stringify({ draw: state.draw, chainLink: cur.n,
-      dumpSha256: cur.sha256, tickets: cur.tickets }, null, 2);
+      dumpSha256: cur.sha256, tickets: sealTickets }, null, 2);
     const ticketsSha = await uvlGh.sha256Hex(new TextEncoder().encode(ticketsText).buffer);
     const seal = { id: state.draw, serverSeed: state.draw,
       sealedAt: new Date().toISOString(), chainLink: cur.n, dumpFile: cur.file,
@@ -699,22 +788,33 @@ S('btnSeal').onclick = async () => {
       parserVersion: uvlParser.VERSION,
       verifierSnapshotFile: verifySrc ? 'uvl-verify-snapshot.cjs' : null,
       verifierVersion: verifyVersion,
-      profile: drawProfile(),                           // v0.4.5: frozen with everything else
+      profile: prof,                                    // v0.4.5: frozen with everything else
       prizeSha256: preflight.prizeSha,
       drand: { beacon: 'quicknet', chainHash: uvlDraw.QUICKNET.chainHash,
                period: preflight.period, genesisTime: preflight.genesis },
       targetRound: preflight.targetRound, targetRoundTimeUtc: preflight.targetTime,
       sealedAtRound: preflight.anchorRound,   // beacon position when the target was chosen (v0.4.15)
       fallbackRule: 'the outcome is decided by the first available round with number >= target (§7.1)',
-      tickets: cur.tickets };
+      tickets: sealTickets };
     if (verifyNote) seal.verifierNote = verifyNote;
+    if (weighted) {
+      seal.carryTicketsFile = 'carry-tickets.json'; seal.carryTicketsSha256 = weighted.carryTicketsSha;
+      seal.carryResultFile  = 'carry-result.json';  seal.carryResultSha256  = weighted.carryResultSha;
+      seal.mergeSnapshotFile = 'uvl-merge-snapshot.js'; seal.mergeSha256 = weighted.mergeSha;
+      seal.mergeVersion = uvlMerge.VERSION;
+    }
     // pointer (seal.json) LAST — matters on the sequential fallback path
     const sealFiles = [ { path: base + 'tickets.json', text: ticketsText },
         { path: base + 'uvl-parser-snapshot.js', text: parserSrc } ];
+    if (weighted) {
+      sealFiles.push({ path: base + 'carry-tickets.json', text: weighted.carryTicketsText });
+      sealFiles.push({ path: base + 'carry-result.json',  text: weighted.carryResultText });
+      sealFiles.push({ path: base + 'uvl-merge-snapshot.js', text: weighted.mergeSrc });
+    }
     if (verifySrc) sealFiles.push({ path: base + 'uvl-verify-snapshot.cjs', text: verifySrc });
     sealFiles.push({ path: base + 'seal.json', text: JSON.stringify(seal, null, 2) });
     const sha = await uvlGh.commitFiles(PAT,
-      'uvl(' + DATA_ROOT + '): SEAL ' + state.draw + ' — ' + cur.tickets.length
+      'uvl(' + DATA_ROOT + '): SEAL ' + state.draw + ' — ' + sealTickets.length
       + ' tickets, target round ' + preflight.targetRound,
       sealFiles);
     S('sealStatus').innerHTML = '<span class="ok">SEALED — commit ' + String(sha).slice(0,7) + '</span>'
