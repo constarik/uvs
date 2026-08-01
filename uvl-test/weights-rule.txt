@@ -1,0 +1,6 @@
+salt: 0000000000000000000000000000000000000000000000000000000000000000
+rule:
+  DUMMY TEST ARTIFACT - not a commitment. This placeholder exists so weighted
+  test draws can exercise the rule-file freeze path (spec 16.4, item 1b).
+  The real weights-rule.txt replaces this file on main-post day; its hash is
+  committed in the rehearsal draw's seal.json (ruleCommitSha256).

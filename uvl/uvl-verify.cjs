@@ -18,7 +18,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 
-const VERSION = '0.2';   // v0.2: weighted draws — frozen merge module + carry files (§16.4)
+const VERSION = '0.3';   // v0.3: frozen weights-rule.txt + commitment cross-check (§16.4 1b)
 const OK = 'OK', MISMATCH = 'MISMATCH', UNVERIFIED = 'UNVERIFIED';
 
 const sha256 = buf => crypto.createHash('sha256').update(buf).digest('hex');
@@ -98,7 +98,7 @@ function stepTickets(dir, seal) {
   }
 
   const mine0 = built.tickets, theirs = seal.tickets || [];
-  let mine = mine0, weightNote = null;
+  let mine = mine0, weightNote = null, ruleNote2 = null;
   if (policy === 'weighted') {
     // §16.4 — the expansion is trust-chain code: everything it feeds on is frozen
     // in this folder and hash-committed in seal.json. Any divergence is MISMATCH,
@@ -117,6 +117,22 @@ function stepTickets(dir, seal) {
     if (ct.err) return report(2, 'ticket list', ct.err[0], ct.err[1]);
     const cr = frozen('carry result', seal.carryResultFile || 'carry-result.json', seal.carryResultSha256, true);
     if (cr.err) return report(2, 'ticket list', cr.err[0], cr.err[1]);
+    // §16.4 1b — the revealed rule file is frozen here; if the carry draw's seal
+    // committed to a rule hash, the two must be the same bytes. This is the whole
+    // point of the pair: the rule provably predates the rehearsal result.
+    let ruleNote = null;
+    if (seal.ruleFile) {
+      const rf = frozen('rule file', seal.ruleFile, seal.ruleFileSha256, true);
+      if (rf.err) return report(2, 'ticket list', rf.err[0], rf.err[1]);
+      const rh = sha256(fs.readFileSync(rf.path));
+      if (seal.carryRuleCommitSha256) {
+        if (rh !== seal.carryRuleCommitSha256)
+          return report(2, 'ticket list', MISMATCH, 'rule file sha256 ' + rh
+            + ' != commitment in the carry draw\'s seal ' + seal.carryRuleCommitSha256);
+        ruleNote = 'rule file matches the commitment sealed before the rehearsal result (§16.4)';
+      } else ruleNote = 'rule file frozen; carry seal recorded no commitment (pre-1b rehearsal)';
+    }
+    ruleNote2 = ruleNote;
     let merge;
     try { merge = require(path.resolve(mf.path)); }
     catch (e) { return report(2, 'ticket list', UNVERIFIED, 'merge snapshot will not load: ' + e.message); }
@@ -155,7 +171,7 @@ function stepTickets(dir, seal) {
     mine.length + ' tickets reproduced from ' + built.entriesTotal + ' entries, order identical',
     'parser ' + (built.class ? built.class.name + ' v' + built.version : 'v' + built.version) +
       ', policy ' + policy + ', excludes ' + ((profile.excludes || []).length)
-  ].concat(weightNote ? [weightNote] : []));
+  ].concat(weightNote ? [weightNote] : []).concat(ruleNote2 ? [ruleNote2] : []));
 }
 
 // ── step 3 ── the seal precedes the round (§7–§8). Pure arithmetic on the

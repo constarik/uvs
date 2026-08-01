@@ -550,6 +550,18 @@ async function demoLadder() {
       if (await uvlGh.sha256Hex(new TextEncoder().encode(crT).buffer) !== s.carryResultSha256)
         bad2.push('carry-result.json hash != sealed');
       if (bad2.length) { push(2, 'ticket list', 'MISMATCH', bad2); throw 'reported'; }
+      if (s.ruleFile) {          // §16.4 1b — frozen rule vs sealed hash vs commitment
+        const rfR = await fetch(base + s.ruleFile + '?t=' + Date.now(), { cache: 'no-store' });
+        if (!rfR.ok) throw new Error('frozen ' + s.ruleFile + ' unreachable (HTTP ' + rfR.status + ')');
+        const rfH = await uvlGh.sha256Hex(new TextEncoder().encode(await rfR.text()).buffer);
+        if (rfH !== s.ruleFileSha256) {
+          push(2, 'ticket list', 'MISMATCH', 'frozen ' + s.ruleFile + ' hash != sealed'); throw 'reported';
+        }
+        if (s.carryRuleCommitSha256 && rfH !== s.carryRuleCommitSha256) {
+          push(2, 'ticket list', 'MISMATCH',
+            'rule file != commitment in the carry draw\'s seal (§16.4)'); throw 'reported';
+        }
+      }
       const cr = JSON.parse(crT);
       const ex = uvlMerge.expandWeighted(mine, {
         tickets: JSON.parse(ctT).tickets || [],
@@ -931,15 +943,28 @@ S('btnSeal').onclick = async () => {
       const mR = await fetch('uvl-merge.js?t=' + Date.now(), { cache: 'no-store' });
       if (!mR.ok) throw new Error('uvl-merge.js -> HTTP ' + mR.status);
       const mergeSrc = await mR.text();
+      // §16.4 (1b): a weighted draw is the REVEAL half of the pair — the published
+      // rule file must exist and gets frozen into this folder; refusing otherwise
+      // protects the real main seal from shipping without its §16.4 evidence.
+      const rfR = await fetch('weights-rule.txt?t=' + Date.now(), { cache: 'no-store' });
+      if (!rfR.ok) throw new Error('weights-rule.txt not published at the site root (HTTP '
+        + rfR.status + ') — a weighted draw cannot seal without the rule file (§16.4)');
+      const ruleText = await rfR.text();
+      // the commitment lives in the carry draw's seal; copy it here so the CLI can
+      // verify rule-vs-commitment from this folder alone (absent for old rehearsals)
+      const csR = await fetch(cbase + 'seal.json?t=' + Date.now(), { cache: 'no-store' });
+      const carrySeal = csR.ok ? await csR.json() : null;
       const winnerUrl = String(carryR.winnerPerson || carryR.winner || '').split('#')[0];
       const ex = uvlMerge.expandWeighted(cur.tickets,
         { tickets: carryT.tickets || [], winnerUrl: winnerUrl, weights: co.weights });
       sealTickets = ex.tickets;
       weighted = {
-        carryTicketsText, carryResultText, mergeSrc,
+        carryTicketsText, carryResultText, mergeSrc, ruleText,
         carryTicketsSha: await uvlGh.sha256Hex(new TextEncoder().encode(carryTicketsText).buffer),
         carryResultSha:  await uvlGh.sha256Hex(new TextEncoder().encode(carryResultText).buffer),
         mergeSha:        await uvlGh.sha256Hex(new TextEncoder().encode(mergeSrc).buffer),
+        ruleFileSha:     await uvlGh.sha256Hex(new TextEncoder().encode(ruleText).buffer),
+        carryRuleCommitSha: (carrySeal && carrySeal.ruleCommitSha256) || null,
         persons: ex.persons, carried: ex.carried
       };
     }
@@ -975,6 +1000,8 @@ S('btnSeal').onclick = async () => {
       seal.carryResultFile  = 'carry-result.json';  seal.carryResultSha256  = weighted.carryResultSha;
       seal.mergeSnapshotFile = 'uvl-merge-snapshot.js'; seal.mergeSha256 = weighted.mergeSha;
       seal.mergeVersion = uvlMerge.VERSION;
+      seal.ruleFile = 'weights-rule.txt'; seal.ruleFileSha256 = weighted.ruleFileSha;
+      seal.carryRuleCommitSha256 = weighted.carryRuleCommitSha;   // null for old rehearsals
     }
     // pointer (seal.json) LAST — matters on the sequential fallback path
     const sealFiles = [ { path: base + 'tickets.json', text: ticketsText },
@@ -983,6 +1010,7 @@ S('btnSeal').onclick = async () => {
       sealFiles.push({ path: base + 'carry-tickets.json', text: weighted.carryTicketsText });
       sealFiles.push({ path: base + 'carry-result.json',  text: weighted.carryResultText });
       sealFiles.push({ path: base + 'uvl-merge-snapshot.js', text: weighted.mergeSrc });
+      sealFiles.push({ path: base + 'weights-rule.txt', text: weighted.ruleText });
     }
     if (verifySrc) sealFiles.push({ path: base + 'uvl-verify-snapshot.cjs', text: verifySrc });
     sealFiles.push({ path: base + 'seal.json', text: JSON.stringify(seal, null, 2) });
