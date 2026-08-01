@@ -54,9 +54,19 @@
   [hidden] { display:none !important; }
   .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin:8px 0; }
   .ok { color:var(--revealed); } .err { color:var(--sealed); } .warn { color:#a07a1f; }
+  /* v0.5.9: he scrolled straight past Verify — give it a card of its own */
+  #secVerify { border:1px solid #ddd6c9; background:#fdfcf9; border-radius:12px;
+               padding:12px 16px 14px; margin-top:22px; }
 </style>
 </head>
 <body>
+<div id="newBuildBar" hidden
+     style="position:sticky;top:0;z-index:9;background:#2f2a22;color:#f5f2ea;padding:8px 14px;
+            display:flex;gap:12px;align-items:center;flex-wrap:wrap;border-radius:0 0 10px 10px">
+  <span id="newBuildTxt"></span>
+  <button id="btnReloadBuild">reload</button>
+  <span style="color:#b9b2a4;font-size:13.5px">reload clears the pasted token — you'll paste it again</span>
+</div>
 <div id="testBanner" hidden>REHEARSAL AREA — test draws only, nothing here is real</div>
 <header>
   <div id="phaseStamp">…</div>
@@ -208,6 +218,20 @@ async function j(url) { // fetch JSON, null on 404 — absent files ARE states
 }
 
 // ---- boot ------------------------------------------------------------------
+const BUILD = '0.5.9';   // baked at deploy; version.txt must always say the same
+// v0.5.9 — his new-build watch: poll version.txt, OFFER a reload, never force one
+// (a reload kills the pasted token and any unsent form — the bar says so).
+async function buildWatch() {
+  try {
+    const v = (await (await fetch('version.txt?t=' + Date.now(), { cache: 'no-store' })).text()).trim();
+    if (/^\d+\.\d+\.\d+$/.test(v) && v !== BUILD && S('newBuildBar').hidden) {
+      S('newBuildTxt').textContent = 'build ' + v + ' is out — this tab runs ' + BUILD;
+      S('newBuildBar').hidden = false;
+    }
+  } catch (e) { /* offline — try again next tick */ }
+  setTimeout(buildWatch, 60000);
+}
+S('btnReloadBuild').onclick = () => location.reload();
 // draws/index.json is an append-only REGISTRY: { "draws": ["id", ...] } — nothing
 // else. There is no stored "active" flag anywhere: a draw's status is derived from
 // its own files (no seal.json = OPEN; seal + round pending = SEALED; round reached
@@ -216,7 +240,10 @@ async function j(url) { // fetch JSON, null on 404 — absent files ARE states
 // /uvl/?new=1      -> the only page carrying the init form
 // /uvl/?draw=<id>  -> that specific draw, forever — the URL posts link to
 async function boot() {
-  S('buildVer').textContent = 'build ' + (await (await fetch('version.txt?t='+Date.now())).text()).trim();
+  // v0.5.9 — the build number is BAKED here, not fetched: a cached page fetching a
+  // fresh version.txt showed the new number on old code and derailed cache debugging.
+  S('buildVer').textContent = 'build ' + BUILD;
+  buildWatch();
   const reg = await j('draws/index.json');
   const ids = (reg && (reg.draws || [].concat(reg.active || [], reg.archived || []))) || [];
   state.index = { draws: ids };

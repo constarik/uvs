@@ -18,7 +18,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 
-const VERSION = '0.3';   // v0.3: frozen weights-rule.txt + commitment cross-check (§16.4 1b)
+const VERSION = '0.4';   // v0.4: CRLF hint on chain mismatch; graceful exit (no libuv assert)
 const OK = 'OK', MISMATCH = 'MISMATCH', UNVERIFIED = 'UNVERIFIED';
 
 const sha256 = buf => crypto.createHash('sha256').update(buf).digest('hex');
@@ -54,7 +54,13 @@ function stepChain(dir, chain, seal) {
     const f = path.join(dir, l.file);
     if (!fs.existsSync(f)) { bad.push(l.file + ': file missing'); return; }
     const h = sha256(fs.readFileSync(f));
-    if (h !== l.sha256) bad.push(l.file + ': sha256 ' + h + ' != declared ' + l.sha256);
+    if (h !== l.sha256) {
+      bad.push(l.file + ': sha256 ' + h + ' != declared ' + l.sha256);
+      if (!stepChain.crlfHinted) { stepChain.crlfHinted = true;
+        bad.push('  (a git clone on Windows may have translated line endings, which '
+          + 'changes bytes without tampering — download the HTTPS archive instead; see verify.html)');
+      }
+    }
     else good.push('link ' + l.n + ' ' + l.file + ' ' + h.slice(0, 12) + '…');
   });
   const last = links[links.length - 1];
@@ -375,7 +381,11 @@ async function main() {
 
   const verdict = verdictOf();
   printReport(dir, verdict);
-  process.exit(verdict.code);
+  // let the event loop drain (drand fetch sockets) instead of exiting mid-teardown —
+  // hard process.exit() here tripped a libuv assertion on Windows. The unref'd timer
+  // caps the wait without holding the loop open itself.
+  process.exitCode = verdict.code;
+  setTimeout(() => process.exit(verdict.code), 1500).unref();
 }
 
 main().catch(e => { console.error('uvl-verify crashed: ' + (e && e.stack || e)); process.exit(2); });
