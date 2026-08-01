@@ -1,0 +1,17 @@
+{
+  "draw": "test-rule-m",
+  "archivedAt": "2026-08-01T06:47:18.218Z",
+  "round": 30921130,
+  "targetRound": 30921130,
+  "usedFallback": false,
+  "randomness": "a31375e56870687dcc755e39bf74194d54ff52f4bb35180afbd1afca1f623aba",
+  "signature": "910703698ff8adecd286cd5c1b38869571ea9b09fc00cfc182bd923901b01f3865c13c5b38abe403ed781158246e1bc0",
+  "combinedSeed": "5dc67162f172924900d957ff4ab98b17dee62e867d145ff12fe399ef2a72e4ec",
+  "winner": "linkedin.com/in/grantfuellenbach#2",
+  "winnerTicket": "TICKET-0103",
+  "winnerScore": "ff976ebe0b2f9d5d00dd96d68b9cfc0b367cbd242e617c7a93d0d6ec7b23c7f4",
+  "winnerPerson": "linkedin.com/in/grantfuellenbach",
+  "successor": "linkedin.com/in/alanamelo#2",
+  "successorTicket": "TICKET-0169",
+  "note": "archive only (spec §12) — the result is derivable by anyone from seal.json and the drand round"
+}
