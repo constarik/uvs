@@ -7,6 +7,7 @@
     "test-time",
     "test-weighted",
     "test-merge",
-    "test-rule-r"
+    "test-rule-r",
+    "test-rule-r2"
   ]
 }
