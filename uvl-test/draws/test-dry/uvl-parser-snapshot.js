@@ -1,0 +1,87 @@
+// uvl-parser v0.1 — turns a captured LinkedIn thread (dump.html) into the ticket list.
+// Protocol artifact (spec §4–§6): published before seal, snapshotted per draw, never
+// modified after. Deterministic, dependency-free, same code in browser and Node.
+//
+// Pipeline: anchors → author URLs (document order) → normalize → dedupe → tickets.
+// Anchor (verified 2026-07-26): id="replaceableComment_urn:li:comment:(…)".
+// Obfuscated class names are build-specific and are deliberately never used.
+(function (root, factory) {
+  if (typeof module === 'object' && module.exports) module.exports = factory();
+  else root.uvlParser = factory();
+})(typeof self !== 'undefined' ? self : this, function () {
+  'use strict';
+  const VERSION = '0.4';
+  // v0.4: policy 'weighted' accepted — extraction is identical to one-per-person
+  // (persons, dump order, dedupe); the replica expansion is uvl-merge's job and
+  // happens strictly after extraction, per the base-class pipeline below.
+  // v0.3: the parser declares itself as a collection class (draw profiles).
+  // Base class = source-independent uvLs semantics: document order -> normalize ->
+  // ticket policy -> numbering -> excludes. This module implements the extractor
+  // for the logged-in LinkedIn SPA post page (URN anchors).
+  const CLASS = { name: 'linkedin-spa', extends: 'uvl-collect-base', version: VERSION };
+  const ANCHOR = 'id="replaceableComment_urn:li:comment:(';
+
+  // §5 — canonical form `linkedin.com/in/<slug>` or null if not a person profile.
+  function normalizeUrl(raw) {
+    if (!raw) return null;
+    let u = String(raw).trim();
+    u = u.replace(/^https?:\/\//i, '');            // scheme
+    u = u.split('#')[0].split('?')[0];             // fragment, query
+    u = u.replace(/^www\./i, '');                  // www.
+    u = u.replace(/^[a-z]{2,3}\.linkedin\.com/i, 'linkedin.com'); // locale subdomains
+    if (!/^linkedin\.com\//i.test(u)) return null;
+    u = u.replace(/^linkedin\.com\/mwlite\/in\//i, 'linkedin.com/in/'); // mobile
+    const m = u.match(/^linkedin\.com\/in\/([^\/]+)/i);   // path tail: keep /in/<slug>
+    if (!m) return null;                           // company pages etc. drop out
+    // v0.2: decodeURIComponent throws on malformed % sequences — fall back to raw
+    let slug = m[1];
+    try { slug = decodeURIComponent(slug); } catch (e) { /* keep raw */ }
+    slug = slug.toLowerCase().replace(/\/+$/, '');
+    if (!slug) return null;
+    return 'linkedin.com/in/' + slug;
+  }
+
+  // dump.html → raw entries, document order. One entry per comment entity.
+  function parseDump(html) {
+    const entries = [];
+    let pos = html.indexOf(ANCHOR);
+    while (pos !== -1) {
+      const next = html.indexOf(ANCHOR, pos + ANCHOR.length);
+      const urnEnd = html.indexOf(')"', pos);
+      const urn = html.slice(pos + 4, urnEnd + 1); // between id=" and closing "
+      const slice = html.slice(pos, next === -1 ? html.length : next);
+      // author = first /in/ href inside the entity (spec §4)
+      const a = slice.match(/href="(https?:\/\/[^"]*linkedin\.com\/(?:mwlite\/)?in\/[^"]+)"/i);
+      entries.push({ urn: urn, rawUrl: a ? a[1] : null, url: a ? normalizeUrl(a[1]) : null });
+      pos = next;
+    }
+    return entries;
+  }
+
+  // Full base-class pipeline. opts: { exclude: [urls], policy: 'one-per-person' }.
+  // Policies decide what repeated appearances of one person are worth; they run
+  // strictly AFTER the order is fixed (§6). 'one-per-person' is the only policy
+  // implemented so far; multi-ticket policies (per-comment caps, weights) land
+  // in the same slot without touching extraction.
+  function buildTickets(html, opts) {
+    const policy = (opts && opts.policy) || 'one-per-person';
+    if (policy !== 'one-per-person' && policy !== 'weighted')
+      throw new Error('ticket policy "' + policy + '" not implemented by ' + CLASS.name + ' v' + VERSION);
+    const exclude = new Set(((opts && opts.exclude) || []).map(normalizeUrl).filter(Boolean));
+    const entries = parseDump(html);
+    const seen = new Set();
+    const tickets = [];
+    for (const e of entries) {
+      if (!e.url) continue;                 // company pages, composer boxes
+      if (exclude.has(e.url)) continue;     // published excludes (organizer)
+      if (seen.has(e.url)) continue;        // one-per-person: first occurrence wins
+      seen.add(e.url);
+      tickets.push({ ticket: 'TICKET-' + String(tickets.length + 1).padStart(4, '0'), url: e.url });
+    }
+    return { version: VERSION, class: CLASS, policy: policy,
+             entriesTotal: entries.length, tickets: tickets };
+  }
+
+  return { VERSION: VERSION, CLASS: CLASS, normalizeUrl: normalizeUrl,
+           parseDump: parseDump, buildTickets: buildTickets };
+});
