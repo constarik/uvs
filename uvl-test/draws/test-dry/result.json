@@ -1,0 +1,17 @@
+{
+  "draw": "test-dry",
+  "archivedAt": "2026-08-01T18:23:37.390Z",
+  "round": 30935077,
+  "targetRound": 30935077,
+  "usedFallback": false,
+  "randomness": "85680a6ab2fb638d92e552efbfac6ee0b3c9844bdc7e1407dc5ae866678b448c",
+  "signature": "8a974be076fec02dbaa0512e55d9635504102b90bab74bdc201fa5620d48b120f11177f34de9beed59593d19244e3ac2",
+  "combinedSeed": "444a07d341417d7671ce8ec4b16af1a038b05dd4f5c86dd744687a2757835829",
+  "winner": "linkedin.com/in/henry-naiho",
+  "winnerTicket": "TICKET-0059",
+  "winnerScore": "ff39b4528916b6241bf665f4a68ed5ec571498e441a17f2667b309cb963a2a90",
+  "winnerPerson": "linkedin.com/in/henry-naiho",
+  "successor": "linkedin.com/in/williamyangxs",
+  "successorTicket": "TICKET-0089",
+  "note": "archive only (spec §12) — the result is derivable by anyone from seal.json and the drand round"
+}
