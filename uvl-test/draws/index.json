@@ -6,6 +6,7 @@
     "test-draw-3",
     "test-time",
     "test-weighted",
-    "test-merge"
+    "test-merge",
+    "test-rule-r"
   ]
 }

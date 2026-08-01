@@ -1,0 +1,20 @@
+{
+  "id": "test-rule-r",
+  "title": "Repetition",
+  "summary": "",
+  "prize": "",
+  "links": {},
+  "profile": {
+    "extract": {
+      "class": "linkedin-spa",
+      "extends": "uvl-collect-base",
+      "version": "0.4"
+    },
+    "tickets": {
+      "policy": "one-per-person"
+    },
+    "excludes": [
+      "linkedin.com/in/constantinerazinsky"
+    ]
+  }
+}
