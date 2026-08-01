@@ -1,30 +1,177 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>uvLottery — manual verification</title>
+<title>uvLottery — verifying a draw</title>
 <style>
   body { font:16px/1.55 system-ui,sans-serif; color:#222; background:#faf8f5;
-         max-width:760px; margin:0 auto; padding:20px; }
+         max-width:780px; margin:0 auto; padding:20px 20px 60px; }
+  h1 { font-size:26px; } h2 { font-size:20px; margin-top:34px; } h3 { font-size:17px; }
   code, pre { font-family:ui-monospace,Consolas,monospace; background:#f3f0ea;
-              border-radius:6px; padding:2px 6px; }
-  pre { padding:10px; overflow:auto; }
-  .muted { color:#777; }
+              border-radius:6px; }
+  code { padding:1px 5px; font-size:14px; }
+  pre { padding:10px 12px; overflow:auto; font-size:13.5px; line-height:1.5; }
+  .muted { color:#777; } .hex { word-break:break-all; }
+  table { border-collapse:collapse; font-size:14.5px; }
+  td, th { border:1px solid #ddd6c9; padding:5px 9px; text-align:left; vertical-align:top; }
+  th { background:#f3f0ea; }
 </style></head><body>
 <h1>Verifying a draw</h1>
-<p class="muted">This page is being written (spec §17.4). What is already true and usable:</p>
-<h2>With the CLI verifier</h2>
-<p>Every draw folder is plain files in the public repository. Download the folder and
-run the verifier — the copy frozen inside the folder at seal, or the current one from
-the site root:</p>
-<pre>node uvl-verify.cjs &lt;draw folder&gt;</pre>
-<p>Exit codes: <b>0</b> everything reproduced · <b>1</b> a published claim does not
-reproduce · <b>2</b> something could not be checked (which is never reported as fine).</p>
-<p>Download over HTTPS (repository tarball or raw files) rather than <code>git clone</code> —
+<p>Nothing on the draw pages asks to be believed. Every published claim — who entered,
+when the list was frozen, which drand round decided, who won — is recomputable from
+plain files in a public repository. The only things you have to trust are SHA-256
+and the <a href="https://drand.love">drand</a> randomness beacon; neither belongs to us.</p>
+<p class="muted">Three levels, by decreasing convenience: the button on a draw page
+(a demonstration — the page verifying itself proves little), the CLI verifier on your
+machine (this page, first half), and redoing everything by hand with no code of ours
+at all (second half).</p>
+
+<h2>1 · Get the files</h2>
+<p>Download the repository as an archive over HTTPS — <b>not</b> <code>git clone</code>:
 Git on Windows may translate line endings on checkout, which changes bytes and fails
-honest hashes unless the repository's <code>.gitattributes</code> is respected.</p>
-<h2>Without our verifier</h2>
-<p class="muted">The full instruction — recomputing every step with nothing but a shell
-and any SHA-256 tool, per ticket policy, with a worked test vector — lands here before
-the first real draw. The derivation in one line until then: winner = highest
-<code>SHA-256(SHA-256(drawId:randomness):ticketUrl)</code> over the sealed ticket list.</p>
-<p><a href="./">← back to the draws</a></p>
+honest hash checks unless the repository's <code>.gitattributes</code> is respected.
+The archive route has no such translation.</p>
+<pre>https://github.com/constarik/uvs/archive/refs/heads/master.zip</pre>
+<p>Unpack, then in a terminal:</p>
+<pre>cd uvs-master\uvl\draws        (real draws)
+cd uvs-master\uvl-test\draws   (test draws)</pre>
+
+<h2>2 · Run the verifier</h2>
+<p>Each sealed draw folder carries the verifier snapshot frozen at seal time; the
+current version also sits at the site root. Either works — the script takes the
+draw folder as its argument:</p>
+<pre>node &lt;draw-id&gt;\uvl-verify-snapshot.cjs &lt;draw-id&gt;</pre>
+<p>Requires only <a href="https://nodejs.org">Node.js</a> — no packages, no install
+step, one file. It prints five steps and exits with:</p>
+<table>
+<tr><th>exit</th><th>meaning</th></tr>
+<tr><td><b>0</b></td><td>every step reproduced — the published outcome follows from the published files</td></tr>
+<tr><td><b>1</b></td><td>MISMATCH — something published does <i>not</i> reproduce; that is an accusation, take it seriously</td></tr>
+<tr><td><b>2</b></td><td>UNVERIFIED — something could not be checked (network, missing file, round not yet published); never conflated with "checked and fine"</td></tr>
+</table>
+<p>The verifier is deliberately <b>outside</b> the chain of trust — a replaced script
+would happily vouch for itself. It prints its version, not its own hash; if you want
+assurance about the script, hash it yourself and compare across sources
+(the frozen snapshot, the site root, the repository):</p>
+<pre>Get-FileHash &lt;draw-id&gt;\uvl-verify-snapshot.cjs        (Windows)
+sha256sum &lt;draw-id&gt;/uvl-verify-snapshot.cjs           (Linux/macOS)</pre>
+
+<h2>3 · What the five steps prove</h2>
+<table>
+<tr><th>step</th><th>claim</th><th>how it is recomputed</th></tr>
+<tr><td>1 dump chain</td><td>the captured entry dumps were not altered after capture</td>
+<td>SHA-256 of every dump file vs the hashes recorded in <code>chain.json</code>; the sealed link must be the last one</td></tr>
+<tr><td>2 ticket list</td><td>the sealed ticket list follows mechanically from the sealed dump — nobody was added or removed by hand</td>
+<td>re-runs the parser snapshot frozen in the folder on the dump; weighted draws also re-run the frozen merge module on the frozen carry files (all hash-checked)</td></tr>
+<tr><td>3 seal precedes round</td><td>the outcome was unknowable when the list was frozen</td>
+<td>arithmetic: drand round N occurs at <code>genesis + (N−1)·period</code>; the seal timestamp must precede it</td></tr>
+<tr><td>4 drand round</td><td>the deciding randomness is the beacon's, not ours</td>
+<td>fetches the round from drand (4 mirrors); checks <code>randomness = SHA-256(signature)</code></td></tr>
+<tr><td>5 winner derivation</td><td>the published winner follows from seed + randomness + list, nothing else</td>
+<td>recomputes every ticket's score, sorts, compares rank 1 and the successor with <code>result.json</code></td></tr>
+</table>
+
+<h2>4 · Without our verifier</h2>
+<p>Everything above can be redone with a shell and any SHA-256 tool. Hex is always
+lowercase; string hashes are over UTF-8 bytes with <b>no trailing newline</b>
+(<code>printf '%s'</code>, not <code>echo</code>).</p>
+
+<h3>4.1 The derivation</h3>
+<pre>combinedSeed = SHA-256( drawId + ":" + randomness )
+score(id)    = SHA-256( combinedSeed + ":" + id )
+ordering     = tickets sorted by score DESC; equal scores by id ASC
+winner       = rank 1
+successor    = first rank below the winner belonging to a DIFFERENT person
+               (a person = the id before "#"; relevant for weighted draws)</pre>
+<p><code>drawId</code> is the draw's folder name (also <code>serverSeed</code> in
+<code>seal.json</code> — it exists for domain separation only and is public from day
+one; all unpredictability comes from the beacon). <code>randomness</code> is the
+deciding round's, from step 4. Ticket ids are the <code>url</code> fields of
+<code>tickets.json</code>, in their sealed order.</p>
+
+<h3>4.2 Worked example</h3>
+<p>Three tickets, two persons — <code>alice</code> with one ticket and
+<code>bob</code> with two replicas (a weighted-draw situation):</p>
+<pre>drawId      example-draw
+randomness  c8f56f8dfea73f7423e46f37a67f7b3f8bd6667bcb6d461b024e5a22b6a44f57
+tickets     linkedin.com/in/alice#1
+            linkedin.com/in/bob#1
+            linkedin.com/in/bob#2</pre>
+<p>Expected results, byte for byte:</p>
+<pre>combined  0a2a3b2281f10d5b98159e06c35c04b2834f3eec08ba692d2869c7542a1cb045
+rank 1    edd1e3079f46fe2a8591cc2e0e29e3d79d3b3ce573bd9d0bfe3b322445d03489  linkedin.com/in/bob#2
+rank 2    65d13821925a8503c605ed67d4b801c1a0f75e21c3baa9f0a21f1ece59cb5bb4  linkedin.com/in/alice#1
+rank 3    48c9f50f8385bfe1d5cce5ee590c36244c41e8c3664cec0247f5c858e1029eba  linkedin.com/in/bob#1</pre>
+<p>Winner: <code>bob#2</code>. Successor: <b>alice#1</b> — rank 3 is skipped because
+it belongs to the winner. Recompute the combined seed yourself:</p>
+<pre># Linux / macOS
+printf '%s' 'example-draw:c8f56f8dfea73f7423e46f37a67f7b3f8bd6667bcb6d461b024e5a22b6a44f57' | sha256sum
+
+# Windows PowerShell
+[BitConverter]::ToString([Security.Cryptography.SHA256]::Create().ComputeHash(
+  [Text.Encoding]::UTF8.GetBytes('example-draw:c8f56f8dfea73f7423e46f37a67f7b3f8bd6667bcb6d461b024e5a22b6a44f57'
+))).Replace('-','').ToLower()</pre>
+<p>Then each rank: hash <code>combined + ":" + id</code> the same way.</p>
+
+<h3>4.3 Getting the randomness</h3>
+<p><code>seal.json</code> names the deciding round (<code>targetRound</code>; if
+<code>result.json</code> says <code>usedFallback</code>, its <code>round</code> is the
+one that decided — the first available round ≥ target, a rule published at seal).
+Fetch it from any drand mirror, e.g.:</p>
+<pre>https://api.drand.sh/v2/chains/52db9ba70e0cc0f6eaf7803dd07447a1f5477735fd3f661792ba94600c84e971/rounds/&lt;N&gt;</pre>
+<p>The chain hash above is quicknet's — it is also recorded in every
+<code>seal.json</code> under <code>drand.chainHash</code>, and the genesis/period for
+step-3 arithmetic sit next to it. The beacon's <code>randomness</code> is by
+definition <code>SHA-256</code> of the round's BLS <code>signature</code> bytes —
+checkable with any hash tool (hex-decode the signature first). Verifying the BLS
+signature itself against quicknet's public key needs a BLS library —
+<a href="https://drand.love/docs/specification/">drand's specification</a> covers it;
+everything else on this page needs nothing but SHA-256.</p>
+
+<h3>4.4 Rebuilding the ticket list by hand</h3>
+<p>Ticket policies are versioned; a draw's policy is frozen in its
+<code>seal.json</code> under <code>profile.tickets.policy</code>. Policy semantics are
+append-only: a policy version is never redefined — changes arrive as a new version.</p>
+<h3>one-per-person <span class="muted">(policy version 1)</span></h3>
+<p>Open the sealed dump (its file and hash are in <code>seal.json</code>). Entries are
+LinkedIn comment blocks, in document order, anchored on elements whose id contains
+<code>replaceableComment_urn:li:comment:</code>. For each entry the person is the
+first profile link (<code>…linkedin.com/in/…</code>) inside it, normalized to
+<code>linkedin.com/in/&lt;slug&gt;</code>: scheme, <code>www.</code>, query and trailing
+slash dropped; locale subdomains (<code>fr.linkedin.com</code>…) collapsed to
+<code>linkedin.com</code>; mobile <code>/mwlite/in/</code> rewritten to
+<code>/in/</code>; the slug percent-decoded and lowercased. First occurrence wins —
+duplicates and entries with no profile link are skipped, as are the organizer
+profiles listed in <code>profile.excludes</code>. Number the survivors
+<code>TICKET-0001…</code> in order: that must equal <code>tickets.json</code>.</p>
+<h3>weighted <span class="muted">(policy version 1, spec §16.4)</span></h3>
+<p>Everything above yields the main-post <i>persons</i>; then the frozen carry files
+in the same folder expand them to tickets:</p>
+<table>
+<tr><th>file</th><th>role</th></tr>
+<tr><td><code>carry-tickets.json</code></td><td>the rehearsal draw's sealed list — every person in it is carried in automatically</td></tr>
+<tr><td><code>carry-result.json</code></td><td>the rehearsal winner (weight 3)</td></tr>
+<tr><td><code>uvl-merge-snapshot.js</code></td><td>the expansion code, frozen at seal</td></tr>
+<tr><td><code>weights-rule.txt</code></td><td>the salted rule text, revealed with the main post</td></tr>
+</table>
+<p>All four have SHA-256s in <code>seal.json</code> — check them first. Weights are
+exclusive categories: rehearsal winner ×3, rehearsal participant ×2 (even if they also
+commented on the main post), main-post-only ×1. Order: main-dump persons in dump
+order, then rehearsal-only persons in rehearsal order; each person's replicas are
+consecutive ids <code>url#1…url#w</code>. Succession skips the winner's own replicas.</p>
+<p>The <b>commitment</b>: the rehearsal draw's <code>seal.json</code> field
+<code>ruleCommitSha256</code> was published <i>before</i> the rehearsal result existed
+(its git commit proves when). The main draw's <code>seal.json</code> copies it as
+<code>carryRuleCommitSha256</code>. Hash the frozen <code>weights-rule.txt</code> —
+it must equal both. That proves the weights were not tuned to favor anyone: the rule
+predates knowing who it would favor.</p>
+
+<h2>5 · Failure modes worth knowing</h2>
+<p>A draw page saying SEALED with no result yet is normal — the deciding round has an
+announced future time and nothing exists to verify until then (the ladder honestly
+shows two UNVERIFIED steps). Hashes failing on a <code>git clone</code> under Windows
+usually mean line-ending translation, not tampering — use the archive download. And
+if the verifier itself is what you doubt: the second half of this page is exactly the
+recipe for not using it.</p>
+
+<p class="muted" style="margin-top:40px"><a href="./">← back to the draws</a> ·
+<a href="https://uncloned.work/">Uncloned Math</a> · uvLs</p>
 </body></html>
