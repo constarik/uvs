@@ -1,0 +1,17 @@
+{
+  "draw": "test-rule-r",
+  "archivedAt": "2026-08-01T06:17:06.030Z",
+  "round": 30920517,
+  "targetRound": 30920517,
+  "usedFallback": false,
+  "randomness": "8381f10d8ddf94d8fa877d3492b2365351843094a817b5e1f87f29e495cd6b9e",
+  "signature": "b3ca4433cd7e8b2daec3247c8063f3c1d5170e265994e5ad4ca8d65ebfa0c0285621500dcf5fb7b7106a63507cc1fa97",
+  "combinedSeed": "f95482c3b70c2f1e8c3db8379cced67e6ea19717c23375a0adfe8e35b4ec35e5",
+  "winner": "linkedin.com/in/joao-nunes-castanheira",
+  "winnerTicket": "TICKET-0083",
+  "winnerScore": "ffb38f870d95e112b2f9bb73ff234dc5ea4eac97e3c896018b8ef720c9140f4e",
+  "winnerPerson": "linkedin.com/in/joao-nunes-castanheira",
+  "successor": "linkedin.com/in/alfredo-hurtado-urbaneja-99352079",
+  "successorTicket": "TICKET-0087",
+  "note": "archive only (spec §12) — the result is derivable by anyone from seal.json and the drand round"
+}
