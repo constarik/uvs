@@ -9,6 +9,7 @@
     "test-merge",
     "test-rule-r",
     "test-rule-r2",
-    "test-rule-m"
+    "test-rule-m",
+    "test-dry"
   ]
 }
