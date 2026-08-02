@@ -2,8 +2,10 @@
   "id": "giveaway-r1",
   "title": "Giveaway — rehearsal round",
   "summary": "",
-  "prize": "",
-  "links": {},
+  "prize": "1 month of Claude Pro",
+  "links": {
+    "post": "https://www.linkedin.com/posts/constantinerazinsky_a-linkedin-lottery-you-can-actually-audit-share-7489685841284456448-upc_/"
+  },
   "profile": {
     "extract": {
       "class": "linkedin-spa",
